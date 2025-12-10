@@ -30,7 +30,9 @@
       default = mkZarumet pkgs;
     });
     devShells = forAllSystems (pkgs: {
-      default = pkgs.callPackages ./nix/shell.nix;
+      default = pkgs.callPackage ./nix/shell.nix {
+        zarumet = packages.${pkgs.stdenv.hostPlatform.system}.default;
+      };
     });
     formatter = forAllSystems (pkgs: pkgs.alejandra);
     overlays.default = final: _prev: {

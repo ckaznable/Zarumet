@@ -2,6 +2,16 @@
 name = "zarumet"
 version = "0.1.0"
 edition = "2024"
+authors = ["Immelancholy <lenalowes0@gmail.com>"]
+license = "MIT"
 
 [dependencies]
 ratatui = "0.29.0"
+crossterm = "0.29.0"
+color-eyre = "0.6.5"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -4,9 +4,8 @@
   rust-analyzer,
   rustup,
   cargo-nextest,
-  cargo-generate,
+  cargo-about,
   alejandra,
-  ...
 }:
 (mkShell.override {inherit (zarumet) stdenv;}) {
   inputsFrom = [zarumet];
@@ -14,7 +13,14 @@
     rust-analyzer
     rustup
     cargo-nextest
+    cargo-about
     alejandra
-    cargo-generate
   ];
+
+  shellHook = ''
+    read -p "Which shell do you use?: " shell
+
+    $shell
+    exit
+  '';
 }
