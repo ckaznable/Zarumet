@@ -1,6 +1,6 @@
 {
   mkShell,
-  # zarumet,
+  zarumet,
   rust-analyzer,
   rustup,
   cargo-nextest,
@@ -8,9 +8,8 @@
   alejandra,
   ...
 }:
-# (mkShell.override {inherit (zarumet) stdenv;}) {
-# inputsFrom = [zarumet];
-mkShell {
+(mkShell.override {inherit (zarumet) stdenv;}) {
+  inputsFrom = [zarumet];
   packages = [
     rust-analyzer
     rustup
