@@ -1,5 +1,5 @@
 {
-  description = "A terminal album art viewer, now made in Rust!";
+  description = "A terminal album art viewer for mpd, now made in Rust!";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
