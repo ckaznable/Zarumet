@@ -5,6 +5,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, Paragraph},
 };
+use ratatui_image::{StatefulImage, picker::Picker, protocol::StatefulProtocol};
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -21,6 +22,10 @@ pub struct App {
     running: bool,
 }
 
+struct Protocol {
+    image: StatefulProtocol,
+}
+
 impl App {
     /// Construct a new instance of [`App`].
     pub fn new() -> Self {
@@ -30,8 +35,14 @@ impl App {
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         self.running = true;
+        let mut picker = Picker::from_query_stdio().unwrap();
+        picker.set_background_color([0, 0, 0, 0]);
+        let dyn_img = image::ImageReader::open("/tmp/artis.png")?.decode()?;
+        let image = picker.new_resize_protocol(dyn_img);
+        let mut protocol = Protocol { image };
         while self.running {
-            terminal.draw(|frame| self.render(frame))?;
+            terminal.draw(|frame| self.render(frame, &mut protocol))?;
+            protocol.image.last_encoding_result();
             self.handle_crossterm_events()?;
         }
         Ok(())
@@ -43,20 +54,10 @@ impl App {
     ///
     /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
-    fn render(&mut self, frame: &mut Frame) {
-        let title = Line::from("Ratatui Simple Template")
-            .bold()
-            .blue()
-            .centered();
-        let text = "Hello, Ratatui!\n\n\
-            Created using https://github.com/ratatui/templates\n\
-            Press `Esc`, `Ctrl-C` or `q` to stop running.";
-        frame.render_widget(
-            Paragraph::new(text)
-                .block(Block::bordered().title(title))
-                .centered(),
-            frame.area(),
-        )
+    fn render(&mut self, frame: &mut Frame<'_>, protocol: &mut Protocol) {
+        let image = StatefulImage::default();
+
+        frame.render_stateful_widget(image, frame.area(), &mut protocol.image);
     }
 
     /// Reads the crossterm events and updates the state of [`App`].
