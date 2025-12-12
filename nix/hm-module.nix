@@ -33,7 +33,7 @@ in {
   config = mkIf cfg.enable {
     home.packages = mkIf (cfg.package != null) [cfg.package];
 
-    xdf.configFile."zarumet/config.toml" = mkIf (cfg.settings != {}) {
+    xdg.configFile."zarumet/config.toml" = mkIf (cfg.settings != {}) {
       source = tomlFormat.generate "config.toml" cfg.settings;
     };
   };
