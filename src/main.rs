@@ -233,7 +233,7 @@ impl SongInfo {
 }
 
 struct Protocol {
-    image: StatefulProtocol,
+    image: Option<StatefulProtocol>,
 }
 
 impl App {
@@ -262,20 +262,27 @@ impl App {
         // Fetch initial song info
         self.update_current_song(&client).await?;
 
+        // Try to get initial image path
         let mut current_image_path = self
             .current_song
             .as_ref()
-            .and_then(|song| song.find_cover_art(&self.config.paths.music_dir))
-            .unwrap_or_default();
+            .and_then(|song| song.find_cover_art(&self.config.paths.music_dir));
 
-        // Create protocol with initial image
-        let dyn_img = image::ImageReader::open(&current_image_path)?.decode()?;
-        let image = picker.new_resize_protocol(dyn_img);
-        let mut protocol = Protocol { image };
+        // Create protocol with initial image (if available)
+        let mut protocol = Protocol {
+            image: current_image_path
+                .as_ref()
+                .and_then(|path| image::ImageReader::open(path).ok())
+                .and_then(|reader| reader.decode().ok())
+                .map(|dyn_img| picker.new_resize_protocol(dyn_img)),
+        };
 
         while self.running {
             terminal.draw(|frame| self.render(frame, &mut protocol))?;
-            protocol.image.last_encoding_result();
+
+            if let Some(ref mut img) = protocol.image {
+                img.last_encoding_result();
+            }
 
             // Poll for events with a timeout to allow periodic updates
             if event::poll(Duration::from_millis(100))? {
@@ -285,19 +292,20 @@ impl App {
             // Update song info periodically
             self.update_current_song(&client).await?;
 
+            // Check for new image
             let new_image_path = self
                 .current_song
                 .as_ref()
-                .and_then(|song| song.find_cover_art(&self.config.paths.music_dir))
-                .unwrap_or_default();
+                .and_then(|song| song.find_cover_art(&self.config.paths.music_dir));
 
             if new_image_path != current_image_path {
-                if let Ok(reader) = image::ImageReader::open(&new_image_path) {
-                    if let Ok(dyn_img) = reader.decode() {
-                        protocol.image = picker.new_resize_protocol(dyn_img);
-                        current_image_path = new_image_path;
-                    }
-                }
+                protocol.image = new_image_path
+                    .as_ref()
+                    .and_then(|path| image::ImageReader::open(path).ok())
+                    .and_then(|reader| reader.decode().ok())
+                    .map(|dyn_img| picker.new_resize_protocol(dyn_img));
+
+                current_image_path = new_image_path;
             }
         }
         Ok(())
@@ -330,15 +338,26 @@ impl App {
         ])
         .split(area);
 
-        // Render the album art image (centered)
-        let image = StatefulImage::default().resize(Resize::Fit(Some(FilterType::Lanczos3)));
-
         let image_area = center_area(
             chunks[0],
             Constraint::Percentage(100),
             Constraint::Percentage(100),
         );
-        frame.render_stateful_widget(image, image_area, &mut protocol.image);
+
+        // Only render image if we have one
+        if let Some(ref mut img) = protocol.image {
+            let image = StatefulImage::default().resize(Resize::Fit(Some(FilterType::Lanczos3)));
+            frame.render_stateful_widget(image, image_area, img);
+        } else {
+            let [centered_area] = Layout::vertical([Constraint::Length(1)])
+                .flex(Flex::Center)
+                .areas(image_area);
+
+            let placeholder = Paragraph::new("No album art")
+                .centered()
+                .style(Style::default().dark_gray());
+            frame.render_widget(placeholder, centered_area);
+        }
 
         // Render the song information
         let song_widget = self.create_song_widget(chunks[1]);
