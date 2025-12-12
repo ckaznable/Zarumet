@@ -43,6 +43,6 @@
       zarumet = mkZarumet final;
     };
 
-    homeModules.default = import ./nix/hm_module.nix self;
+    homeModules.default = import ./nix/hm-module.nix self;
   };
 }
