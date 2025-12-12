@@ -10,6 +10,7 @@
   };
 
   outputs = {
+    self,
     nixpkgs,
     rust-overlay,
     ...
@@ -40,5 +41,7 @@
     overlays.default = final: _prev: {
       zarumet = mkZarumet final;
     };
+
+    homeModules.default = import ./nix/hm_module.nix self;
   };
 }
