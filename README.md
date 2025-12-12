@@ -8,7 +8,7 @@ Zarumet is an mpd album art viewer for the terminal written in Rust.
 
 ## Dependencies
 
-- [mpd](musicpd.org)
+- [mpd](https://musicpd.org)
 - A terminal emulator that supports truecolor and UTF-8 encoding.
 
 ## 🦀 Installation
