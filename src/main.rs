@@ -6,6 +6,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use mpd_client::{Client, commands};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::net::TcpStream;
 
@@ -59,15 +60,21 @@ impl App {
         // Fetch initial song info
         self.update_current_song(&client).await?;
 
-        // Try to get initial image path
-        let mut current_image_path = self
+        // Track the current song's file path (not the image path)
+        let mut current_song_file: Option<PathBuf> = self
+            .current_song
+            .as_ref()
+            .map(|song| song.file_path.clone());
+
+        // Try to get initial image
+        let initial_image_path = self
             .current_song
             .as_ref()
             .and_then(|song| song.find_cover_art(&self.config.mpd.music_dir));
 
         // Create protocol with initial image (if available)
         let mut protocol = Protocol {
-            image: current_image_path
+            image: initial_image_path
                 .as_ref()
                 .and_then(|path| image::ImageReader::open(path).ok())
                 .and_then(|reader| reader.decode().ok())
@@ -90,20 +97,26 @@ impl App {
             // Update song info periodically
             self.update_current_song(&client).await?;
 
-            // Check for new image
-            let new_image_path = self
+            // Check if the song changed (not just the image path)
+            let new_song_file: Option<PathBuf> = self
                 .current_song
                 .as_ref()
-                .and_then(|song| song.find_cover_art(&self.config.mpd.music_dir));
+                .map(|song| song.file_path.clone());
 
-            if new_image_path != current_image_path {
+            if new_song_file != current_song_file {
+                // Song changed, reload the cover art
+                let new_image_path = self
+                    .current_song
+                    .as_ref()
+                    .and_then(|song| song.find_cover_art(&self.config.mpd.music_dir));
+
                 protocol.image = new_image_path
                     .as_ref()
                     .and_then(|path| image::ImageReader::open(path).ok())
                     .and_then(|reader| reader.decode().ok())
                     .map(|dyn_img| picker.new_resize_protocol(dyn_img));
 
-                current_image_path = new_image_path;
+                current_song_file = new_song_file;
             }
         }
         Ok(())
