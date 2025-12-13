@@ -1,6 +1,4 @@
-use image::ImageReader;
-use mpd_client::{Client, responses::Song};
-use std::io::Cursor;
+use mpd_client::{Client, client::CommandError, commands::SetBinaryLimit, responses::Song};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -8,7 +6,6 @@ pub struct SongInfo {
     pub title: String,
     pub artist: String,
     pub album: String,
-    pub album_dir: PathBuf,
     pub file_path: PathBuf,
 }
 
@@ -30,31 +27,23 @@ impl SongInfo {
 
         let file_path = song.file_path().to_path_buf();
 
-        let album_dir = song
-            .file_path()
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_default();
-
         Self {
             title,
             artist,
             album,
-            album_dir,
             file_path,
         }
     }
+    pub async fn set_max_art_size(client: &Client, size_bytes: usize) -> Result<(), CommandError> {
+        client.command(SetBinaryLimit(size_bytes)).await
+    }
     pub async fn load_cover(&self, client: &Client) -> Option<Vec<u8>> {
-        let art_data = client
-            .album_art(&self.file_path.to_string_lossy())
-            .await
-            .ok();
+        let uri = self.file_path.to_str()?;
+        eprintln!("Loading cover for {}", uri);
+        let art_data_result = client.album_art(&uri).await.ok()?;
 
-        if let Some(Some((data, Some(_mime_type)))) = art_data {
-            let raw_data = data.to_vec();
-            return Some(raw_data);
-        } else {
-            return None;
-        }
+        let (raw_data, _mime_type_option) = art_data_result?;
+
+        return Some(raw_data.to_vec());
     }
 }

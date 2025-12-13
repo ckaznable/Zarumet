@@ -71,6 +71,11 @@ impl App {
         let connection = TcpStream::connect(&self.config.mpd.address).await?;
         let (client, _state_changes) = Client::connect(connection).await?;
 
+        match SongInfo::set_max_art_size(&client, 5 * 1024 * 1024).await {
+            Ok(_) => println!("MPD binary limit set to 5MB successfully."),
+            Err(e) => eprintln!("Failed to set MPD binary limit: {}", e),
+        }
+
         // Set up the image picker and protocol
         let mut picker = Picker::from_query_stdio().unwrap();
         picker.set_background_color([0, 0, 0, 0]);
