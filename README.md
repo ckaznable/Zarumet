@@ -83,7 +83,6 @@ Enable the zarumet program and configure to your liking:
     settings = {
       mpd = {
         address = "localhost:6600";
-        music_dir = "/home/youruser/Music";
       };
       colors = {
         album = "#fae280";
@@ -125,7 +124,6 @@ Default configuration:
 ```Toml
 [mpd]
 address = "localhost:6600"
-music_dir = "/home/youruser/Music"
 
 [colors]
 album = "#fae280"
