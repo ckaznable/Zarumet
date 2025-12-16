@@ -1,4 +1,9 @@
-use mpd_client::{Client, client::CommandError, commands::SetBinaryLimit, responses::{Song, PlayState}};
+use mpd_client::{
+    Client,
+    client::CommandError,
+    commands::SetBinaryLimit,
+    responses::{PlayState, Song},
+};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -59,7 +64,11 @@ impl SongInfo {
         self.progress = progress;
     }
 
-    pub fn update_time_info(&mut self, elapsed: Option<std::time::Duration>, duration: Option<std::time::Duration>) {
+    pub fn update_time_info(
+        &mut self,
+        elapsed: Option<std::time::Duration>,
+        duration: Option<std::time::Duration>,
+    ) {
         self.elapsed = elapsed;
         self.duration = duration;
     }

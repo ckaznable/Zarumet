@@ -102,12 +102,21 @@ fn create_left_box_bottom(
     let border_color = config.colors.border_color();
     let border_title_color = config.colors.border_title_color();
     let song_title_color = config.colors.song_title_color();
+    let progress_filled_color = config.colors.progress_filled_color();
+    let progress_empty_color = config.colors.progress_empty_color();
 
     let state_text = match play_state {
         Some(mpd_client::responses::PlayState::Playing) => "▶",
         Some(mpd_client::responses::PlayState::Paused) => "⏸",
         Some(mpd_client::responses::PlayState::Stopped) => "⏹",
         None => "⏹",
+    };
+
+    let state_color = match play_state {
+        Some(mpd_client::responses::PlayState::Playing) => config.colors.playing(),
+        Some(mpd_client::responses::PlayState::Paused) => config.colors.paused(),
+        Some(mpd_client::responses::PlayState::Stopped) => config.colors.stopped(),
+        None => config.colors.stopped(),
     };
 
     let progress_value = progress.unwrap_or(0.0);
@@ -119,6 +128,12 @@ fn create_left_box_bottom(
         border_title_color: Style,
         border_color: Style,
         song_title_color: Style,
+        progress_filled_color: Style,
+        progress_empty_color: Style,
+        state_color: Style,
+        time_elapsed_color: Style,
+        time_duration_color: Style,
+        time_separator_color: Style,
         elapsed: Option<std::time::Duration>,
         duration: Option<std::time::Duration>,
     }
@@ -134,47 +149,46 @@ fn create_left_box_bottom(
             let inner = block.inner(area);
             block.render(area, buf);
 
-            // Format time display
-            let time_text = match (self.elapsed, self.duration) {
-                (Some(elapsed), Some(duration)) => {
-                    format!(
-                        " {}/{} ",
-                        format_duration(elapsed),
-                        format_duration(duration)
-                    )
-                }
-                (Some(elapsed), None) => format!(" {}/--:-- ", format_duration(elapsed)),
-                (None, Some(duration)) => format!(" --:--/{} ", format_duration(duration)),
-                (None, None) => " --:--/--:-- ".to_string(),
+            // Create styled time spans
+            let time_spans = match (self.elapsed, self.duration) {
+                (Some(elapsed), Some(duration)) => vec![
+                    Span::styled(" ", self.song_title_color),
+                    Span::styled(format_duration(elapsed), self.time_elapsed_color),
+                    Span::styled("/", self.time_separator_color),
+                    Span::styled(format_duration(duration), self.time_duration_color),
+                    Span::styled(" ", self.song_title_color),
+                ],
+                (Some(elapsed), None) => vec![
+                    Span::styled(" ", self.song_title_color),
+                    Span::styled(format_duration(elapsed), self.time_elapsed_color),
+                    Span::styled("/--:-- ", self.song_title_color),
+                ],
+                (None, Some(duration)) => vec![
+                    Span::styled(" --:--/", self.song_title_color),
+                    Span::styled(format_duration(duration), self.time_duration_color),
+                    Span::styled(" ", self.song_title_color),
+                ],
+                (None, None) => vec![Span::styled(" --:--/--:-- ", self.song_title_color)],
             };
-            let time_width = time_text.len();
+            let time_width: usize = time_spans.iter().map(|span| span.content.len()).sum();
 
             // Calculate available width for progress bar
-            let border_title_width = 1; // border_title icon
-            let percentage_width = if self.progress_percentage >= 100 {
-                3
-            } else {
-                2
-            }; // "XX%" or "X%"
+            let state_width = 3; // state icon
             let spacing_width = 2; // Spaces around percentage
-            let total_text_width =
-                border_title_width + percentage_width + spacing_width + time_width;
+            let total_text_width = state_width + spacing_width + time_width;
 
             let bar_width = inner.width.saturating_sub(total_text_width as u16) as usize;
             let filled = (self.progress_percentage as usize * bar_width / 100).min(bar_width);
             let empty = bar_width.saturating_sub(filled);
 
-            let content = Line::from(vec![
-                Span::styled(format!(" {} ", self.state_text), self.song_title_color),
-                Span::styled(
-                    format!("{}%", self.progress_percentage),
-                    self.song_title_color,
-                ),
-                Span::styled(" ", self.song_title_color),
-                Span::styled("━".repeat(filled), self.border_color),
-                Span::styled("━".repeat(empty), self.border_title_color),
-                Span::styled(time_text, self.song_title_color),
-            ]);
+            let mut content_spans = vec![
+                Span::styled(&self.state_text, self.state_color),
+                Span::styled(" ", self.state_color),
+                Span::styled("━".repeat(filled), self.progress_filled_color),
+                Span::styled("━".repeat(empty), self.progress_empty_color),
+            ];
+            content_spans.extend(time_spans);
+            let content = Line::from(content_spans);
 
             let paragraph = Paragraph::new(content).centered();
             paragraph.render(inner, buf);
@@ -187,6 +201,12 @@ fn create_left_box_bottom(
         border_title_color: Style::default().fg(border_title_color),
         border_color: Style::default().fg(border_color),
         song_title_color: Style::default().fg(song_title_color),
+        progress_filled_color: Style::default().fg(progress_filled_color),
+        progress_empty_color: Style::default().fg(progress_empty_color),
+        state_color: Style::default().fg(state_color),
+        time_elapsed_color: Style::default().fg(config.colors.time_elapsed()),
+        time_duration_color: Style::default().fg(config.colors.time_duration()),
+        time_separator_color: Style::default().fg(config.colors.time_separator()),
         elapsed,
         duration,
     }
@@ -220,17 +240,19 @@ fn create_song_widget<'a>(current_song: &'a Option<SongInfo>, config: &Config) -
     let border_color = config.colors.border_color();
 
     let lines = match current_song {
-        Some(song) => vec![
-            Line::from(vec![Span::styled(
-                &song.title,
-                Style::default().fg(song_title_color),
-            )]),
-            Line::from(vec![
-                Span::styled(&song.artist, Style::default().fg(artist_color)),
-                Span::styled(" - ", Style::default().fg(border_title_color)),
-                Span::styled(&song.album, Style::default().fg(album_color)),
-            ]),
-        ],
+        Some(song) => {
+            vec![
+                Line::from(vec![Span::styled(
+                    &song.title,
+                    Style::default().fg(song_title_color),
+                )]),
+                Line::from(vec![
+                    Span::styled(&song.artist, Style::default().fg(artist_color)),
+                    Span::styled(" - ", Style::default().fg(border_title_color)),
+                    Span::styled(&song.album, Style::default().fg(album_color)),
+                ]),
+            ]
+        }
         None => vec![Line::from("No song playing").dark_gray()],
     };
 

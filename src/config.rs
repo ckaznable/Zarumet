@@ -19,6 +19,14 @@ pub struct ColorsConfig {
     pub album: String,
     pub artist: String,
     pub border_title: String,
+    pub progress_filled: String,
+    pub progress_empty: String,
+    pub paused: String,
+    pub playing: String,
+    pub stopped: String,
+    pub time_separator: String,
+    pub time_duration: String,
+    pub time_elapsed: String,
 }
 
 impl Config {
@@ -71,10 +79,58 @@ impl ColorsConfig {
         Some((r, g, b))
     }
 
+    pub fn time_elapsed(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.time_elapsed)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::White)
+    }
+
+    pub fn time_duration(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.time_duration)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::White)
+    }
+
+    pub fn time_separator(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.time_separator)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::White)
+    }
+
+    pub fn paused(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.paused)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::White)
+    }
+
+    pub fn playing(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.playing)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::White)
+    }
+
+    pub fn stopped(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.stopped)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::White)
+    }
+
     pub fn album_color(&self) -> ratatui::style::Color {
         Self::parse_hex(&self.album)
             .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
             .unwrap_or(ratatui::style::Color::White)
+    }
+
+    pub fn progress_filled_color(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.progress_filled)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::Green)
+    }
+
+    pub fn progress_empty_color(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.progress_empty)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::Black)
     }
 
     pub fn border_title_color(&self) -> ratatui::style::Color {
@@ -122,11 +178,19 @@ impl Default for MpdConfig {
 impl Default for ColorsConfig {
     fn default() -> Self {
         Self {
-            border: "#FAE280".to_string(),
-            song_title: "#FAE280".to_string(),
-            album: "#FAE280".to_string(),
-            artist: "#FAE280".to_string(),
-            border_title: "#FAE280".to_string(),
+            album: "#26a0a1".to_string(),
+            artist: "#d67751".to_string(),
+            song_title: "#fae280".to_string(),
+            border: "#fae280".to_string(),
+            border_title: "#8193af".to_string(),
+            playing: "#fae280".to_string(),
+            paused: "#fae280".to_string(),
+            stopped: "#fae280".to_string(),
+            progress_filled: "#26a0a1".to_string(),
+            progress_empty: "#1b1d0e".to_string(),
+            time_elapsed: "#c6bb69".to_string(),
+            time_separator: "#c6bb69".to_string(),
+            time_duration: "#c6bb69".to_string(),
         }
     }
 }
