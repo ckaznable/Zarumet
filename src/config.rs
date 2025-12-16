@@ -15,10 +15,10 @@ pub struct MpdConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ColorsConfig {
     pub border: String,
-    pub title: String,
+    pub song_title: String,
     pub album: String,
     pub artist: String,
-    pub status: String,
+    pub border_title: String,
 }
 
 impl Config {
@@ -77,8 +77,8 @@ impl ColorsConfig {
             .unwrap_or(ratatui::style::Color::White)
     }
 
-    pub fn status_color(&self) -> ratatui::style::Color {
-        Self::parse_hex(&self.status)
+    pub fn border_title_color(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.border_title)
             .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
             .unwrap_or(ratatui::style::Color::White)
     }
@@ -95,8 +95,8 @@ impl ColorsConfig {
             .unwrap_or(ratatui::style::Color::Cyan)
     }
 
-    pub fn title_color(&self) -> ratatui::style::Color {
-        Self::parse_hex(&self.title)
+    pub fn song_title_color(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.song_title)
             .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
             .unwrap_or(ratatui::style::Color::Yellow)
     }
@@ -123,10 +123,10 @@ impl Default for ColorsConfig {
     fn default() -> Self {
         Self {
             border: "#FAE280".to_string(),
-            title: "#FAE280".to_string(),
+            song_title: "#FAE280".to_string(),
             album: "#FAE280".to_string(),
             artist: "#FAE280".to_string(),
-            status: "#FAE280".to_string(),
+            border_title: "#FAE280".to_string(),
         }
     }
 }

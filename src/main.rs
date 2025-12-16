@@ -118,8 +118,9 @@ impl App {
                 self.handle_crossterm_events()?;
             }
 
-            // Update song info periodically
+            // Update song info and status periodically
             self.update_current_song(&client).await?;
+            self.update_status(&client).await?;
 
             // Check if the song changed (not just the image path)
             let new_song_file: Option<PathBuf> = self
@@ -164,6 +165,30 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    /// Update the MPD status (playback state)
+    async fn update_status(&mut self, client: &Client) -> color_eyre::Result<()> {
+        match client.command(commands::Status).await {
+            Ok(status) => {
+                let progress = match (status.elapsed, status.duration) {
+                    (Some(elapsed), Some(duration)) => {
+                        Some(elapsed.as_secs_f64() / duration.as_secs_f64())
+                    }
+                    _ => None,
+                };
+
+                if let Some(ref mut song) = self.current_song {
+                    song.update_playback_info(Some(status.state), progress);
+                    song.update_time_info(status.elapsed, status.duration);
+                }
+                Ok(())
+            }
+            Err(_) => {
+                // Keep the previous status on error
+                Ok(())
+            }
+        }
     }
 
     /// Reads the crossterm events and updates the state of [`App`].

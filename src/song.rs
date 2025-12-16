@@ -1,4 +1,4 @@
-use mpd_client::{Client, client::CommandError, commands::SetBinaryLimit, responses::Song};
+use mpd_client::{Client, client::CommandError, commands::SetBinaryLimit, responses::{Song, PlayState}};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -7,6 +7,10 @@ pub struct SongInfo {
     pub artist: String,
     pub album: String,
     pub file_path: PathBuf,
+    pub play_state: Option<PlayState>,
+    pub progress: Option<f64>,
+    pub elapsed: Option<std::time::Duration>,
+    pub duration: Option<std::time::Duration>,
 }
 
 impl SongInfo {
@@ -32,6 +36,10 @@ impl SongInfo {
             artist,
             album,
             file_path,
+            play_state: None,
+            progress: None,
+            elapsed: None,
+            duration: None,
         }
     }
     pub async fn set_max_art_size(client: &Client, size_bytes: usize) -> Result<(), CommandError> {
@@ -44,5 +52,15 @@ impl SongInfo {
         let (raw_data, _mime_type_option) = art_data_result?;
 
         return Some(raw_data.to_vec());
+    }
+
+    pub fn update_playback_info(&mut self, play_state: Option<PlayState>, progress: Option<f64>) {
+        self.play_state = play_state;
+        self.progress = progress;
+    }
+
+    pub fn update_time_info(&mut self, elapsed: Option<std::time::Duration>, duration: Option<std::time::Duration>) {
+        self.elapsed = elapsed;
+        self.duration = duration;
     }
 }

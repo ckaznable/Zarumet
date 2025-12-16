@@ -1,0 +1,9 @@
+[mpd]
+address = "127.0.0.1:6600"
+
+[colors]
+album = "#26a0a1"
+artist = "#d67751"
+border = "#fae280"
+border_title = "#8193af"
+song_title = "#fae280"
