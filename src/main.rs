@@ -1,10 +1,11 @@
+mod binds;
 mod cli;
 mod config;
 mod song;
 mod ui;
 
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use futures::executor::block_on;
 use mpd_client::{Client, commands};
 use ratatui::DefaultTerminal;
@@ -18,6 +19,7 @@ use cli::Args;
 use config::Config;
 use song::SongInfo;
 use ui::Protocol;
+use binds::{KeyBinds, MPDAction};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -125,7 +127,7 @@ impl App {
 
             // Poll for events with a timeout to allow periodic updates
             if event::poll(Duration::from_millis(100))? {
-                self.handle_crossterm_events()?;
+                self.handle_crossterm_events(&client).await?;
             }
 
             // Update song info, queue, and status periodically
@@ -216,9 +218,9 @@ impl App {
     }
 
     /// Reads the crossterm events and updates the state of [`App`].
-    fn handle_crossterm_events(&mut self) -> color_eyre::Result<()> {
+    async fn handle_crossterm_events(&mut self, client: &mpd_client::Client) -> color_eyre::Result<()> {
         match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key),
+            Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key, client).await?,
             Event::Mouse(_) => {}
             Event::Resize(_, _) => {}
             _ => {}
@@ -227,12 +229,23 @@ impl App {
     }
 
     /// Handles the key events and updates the state of [`App`].
-    fn on_key_event(&mut self, key: KeyEvent) {
-        match (key.modifiers, key.code) {
-            (_, KeyCode::Esc | KeyCode::Char('q'))
-            | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-            _ => {}
+    async fn on_key_event(&mut self, key: KeyEvent, client: &mpd_client::Client) -> color_eyre::Result<()> {
+        if let Some(action) = KeyBinds::handle_key(key) {
+            match action {
+                MPDAction::Quit => self.quit(),
+                MPDAction::Refresh => {
+                    // Force refresh by updating current song and queue
+                    // This will be handled in the next update cycle
+                }
+                _ => {
+                    // Execute MPD command for other actions
+                    if let Err(e) = action.execute(client).await {
+                        eprintln!("Error executing MPD command: {}", e);
+                    }
+                }
+            }
         }
+        Ok(())
     }
 
     /// Set running to false to quit the application.

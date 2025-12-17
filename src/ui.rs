@@ -136,8 +136,8 @@ fn create_left_box_bottom(
     let progress_empty_color = config.colors.progress_empty_color();
 
     let state_text = match play_state {
-        Some(mpd_client::responses::PlayState::Playing) => "▶",
-        Some(mpd_client::responses::PlayState::Paused) => "⏸",
+        Some(mpd_client::responses::PlayState::Playing) => "⏸",
+        Some(mpd_client::responses::PlayState::Paused) => "▶",
         Some(mpd_client::responses::PlayState::Stopped) => "⏹",
         None => "⏹",
     };
@@ -253,7 +253,7 @@ fn create_left_box_top<'a>(queue: &[SongInfo], config: &Config, area: Rect) -> P
     let inner_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
 
     let queue_text = if queue.is_empty() {
-        "Queue is empty".to_string()
+        "".to_string()
     } else {
         queue
             .iter()
