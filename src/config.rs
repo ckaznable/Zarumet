@@ -3,29 +3,45 @@ use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
+    #[serde(default)]
     pub mpd: MpdConfig,
+    #[serde(default)]
     pub colors: ColorsConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MpdConfig {
+    #[serde(default = "MpdConfig::default_address")]
     pub address: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ColorsConfig {
+    #[serde(default = "ColorsConfig::default_border")]
     pub border: String,
+    #[serde(default = "ColorsConfig::default_song_title")]
     pub song_title: String,
+    #[serde(default = "ColorsConfig::default_album")]
     pub album: String,
+    #[serde(default = "ColorsConfig::default_artist")]
     pub artist: String,
+    #[serde(default = "ColorsConfig::default_border_title")]
     pub border_title: String,
+    #[serde(default = "ColorsConfig::default_progress_filled")]
     pub progress_filled: String,
+    #[serde(default = "ColorsConfig::default_progress_empty")]
     pub progress_empty: String,
+    #[serde(default = "ColorsConfig::default_paused")]
     pub paused: String,
+    #[serde(default = "ColorsConfig::default_playing")]
     pub playing: String,
+    #[serde(default = "ColorsConfig::default_stopped")]
     pub stopped: String,
+    #[serde(default = "ColorsConfig::default_time_separator")]
     pub time_separator: String,
+    #[serde(default = "ColorsConfig::default_time_duration")]
     pub time_duration: String,
+    #[serde(default = "ColorsConfig::default_time_elapsed")]
     pub time_elapsed: String,
 }
 
@@ -61,7 +77,10 @@ impl Config {
             return Ok(default_config);
         }
         let contents = std::fs::read_to_string(&config_path)?;
-        let config: Config = toml::from_str(&contents)?;
+        let config: Config = toml::from_str(&contents).unwrap_or_else(|e| {
+            eprintln!("Warning: Failed to parse config file: {}", e);
+            Config::default()
+        });
         Ok(config)
     }
 }
@@ -167,30 +186,90 @@ impl Default for Config {
     }
 }
 
+impl MpdConfig {
+    fn default_address() -> String {
+        "localhost:6600".to_string()
+    }
+}
+
 impl Default for MpdConfig {
     fn default() -> Self {
         Self {
-            address: "localhost:6600".to_string(),
+            address: Self::default_address(),
         }
+    }
+}
+
+impl ColorsConfig {
+    fn default_border() -> String {
+        "#fae280".to_string()
+    }
+
+    fn default_song_title() -> String {
+        "#fae280".to_string()
+    }
+
+    fn default_album() -> String {
+        "#26a0a1".to_string()
+    }
+
+    fn default_artist() -> String {
+        "#d67751".to_string()
+    }
+
+    fn default_border_title() -> String {
+        "#8193af".to_string()
+    }
+
+    fn default_progress_filled() -> String {
+        "#26a0a1".to_string()
+    }
+
+    fn default_progress_empty() -> String {
+        "#1b1d0e".to_string()
+    }
+
+    fn default_paused() -> String {
+        "#fae280".to_string()
+    }
+
+    fn default_playing() -> String {
+        "#fae280".to_string()
+    }
+
+    fn default_stopped() -> String {
+        "#fae280".to_string()
+    }
+
+    fn default_time_separator() -> String {
+        "#c6bb69".to_string()
+    }
+
+    fn default_time_duration() -> String {
+        "#c6bb69".to_string()
+    }
+
+    fn default_time_elapsed() -> String {
+        "#c6bb69".to_string()
     }
 }
 
 impl Default for ColorsConfig {
     fn default() -> Self {
         Self {
-            album: "#26a0a1".to_string(),
-            artist: "#d67751".to_string(),
-            song_title: "#fae280".to_string(),
-            border: "#fae280".to_string(),
-            border_title: "#8193af".to_string(),
-            playing: "#fae280".to_string(),
-            paused: "#fae280".to_string(),
-            stopped: "#fae280".to_string(),
-            progress_filled: "#26a0a1".to_string(),
-            progress_empty: "#1b1d0e".to_string(),
-            time_elapsed: "#c6bb69".to_string(),
-            time_separator: "#c6bb69".to_string(),
-            time_duration: "#c6bb69".to_string(),
+            album: Self::default_album(),
+            artist: Self::default_artist(),
+            song_title: Self::default_song_title(),
+            border: Self::default_border(),
+            border_title: Self::default_border_title(),
+            playing: Self::default_playing(),
+            paused: Self::default_paused(),
+            stopped: Self::default_stopped(),
+            progress_filled: Self::default_progress_filled(),
+            progress_empty: Self::default_progress_empty(),
+            time_elapsed: Self::default_time_elapsed(),
+            time_separator: Self::default_time_separator(),
+            time_duration: Self::default_time_duration(),
         }
     }
 }

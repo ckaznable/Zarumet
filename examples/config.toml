@@ -1,5 +1,5 @@
 [mpd]
-address = "127.0.0.1:6600"
+address = "localhost:6600"
 
 [colors]
 album = "#26a0a1"
