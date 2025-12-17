@@ -2413,6 +2413,7 @@ dependencies = [
  "serde",
  "tokio",
  "toml",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]

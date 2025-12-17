@@ -11,7 +11,7 @@ impl KeyBinds {
             // Playback controls
             (_, KeyCode::Char(' ')) => Some(MPDAction::TogglePlayPause),
             (_, KeyCode::Char('p')) => Some(MPDAction::TogglePlayPause),
-            (_, KeyCode::Char('s')) => Some(MPDAction::Stop),
+            (_, KeyCode::Char('x')) => Some(MPDAction::Stop),
             (_, KeyCode::Char('>')) | (_, KeyCode::Char('n')) => Some(MPDAction::Next),
             (_, KeyCode::Char('<')) | (_, KeyCode::Char('b')) => Some(MPDAction::Previous),
 
@@ -21,16 +21,30 @@ impl KeyBinds {
             (_, KeyCode::Char('m')) => Some(MPDAction::ToggleMute),
 
             // Seek controls
-            (_, KeyCode::Char('l')) => Some(MPDAction::SeekForward),
-            (_, KeyCode::Char('h')) => Some(MPDAction::SeekBackward),
-            (_, KeyCode::Right) => Some(MPDAction::SeekForward),
-            (_, KeyCode::Left) => Some(MPDAction::SeekBackward),
+            (KeyModifiers::CONTROL, KeyCode::Char('l')) => Some(MPDAction::SeekForward),
+            (KeyModifiers::CONTROL, KeyCode::Char('h')) => Some(MPDAction::SeekBackward),
+            (KeyModifiers::CONTROL, KeyCode::Right) => Some(MPDAction::SeekForward),
+            (KeyModifiers::CONTROL, KeyCode::Left) => Some(MPDAction::SeekBackward),
+            (KeyModifiers::CONTROL, KeyCode::Char('k')) => Some(MPDAction::MoveUpInQueue),
+            (KeyModifiers::CONTROL, KeyCode::Char('j')) => Some(MPDAction::MoveDownInQueue),
+            (KeyModifiers::CONTROL, KeyCode::Up) => Some(MPDAction::MoveUpInQueue),
+            (KeyModifiers::CONTROL, KeyCode::Down) => Some(MPDAction::MoveDownInQueue),
 
             // Queue controls
-            (_, KeyCode::Char('c')) => Some(MPDAction::ClearQueue),
-            (_, KeyCode::Char('r')) => Some(MPDAction::Random),
-            (_, KeyCode::Char('z')) => Some(MPDAction::Repeat),
-            (_, KeyCode::Char('x')) => Some(MPDAction::Single),
+            (_, KeyCode::Char('d')) => Some(MPDAction::ClearQueue),
+            (_, KeyCode::Char('r')) => Some(MPDAction::Repeat),
+            (_, KeyCode::Char('z')) => Some(MPDAction::Random),
+            (_, KeyCode::Char('s')) => Some(MPDAction::Single),
+            (_, KeyCode::Char('c')) => Some(MPDAction::Consume),
+
+            // Queue navigation
+            (_, KeyCode::Char('j')) => Some(MPDAction::QueueDown),
+            (_, KeyCode::Char('k')) => Some(MPDAction::QueueUp),
+            (_, KeyCode::Down) => Some(MPDAction::QueueDown),
+            (_, KeyCode::Up) => Some(MPDAction::QueueUp),
+            (_, KeyCode::Enter) => Some(MPDAction::PlaySelected),
+            (_, KeyCode::Char('l')) => Some(MPDAction::PlaySelected),
+            (_, KeyCode::Right) => Some(MPDAction::PlaySelected),
 
             // Application controls
             (_, KeyCode::Esc) | (_, KeyCode::Char('q')) => Some(MPDAction::Quit),
@@ -51,6 +65,12 @@ pub enum MPDAction {
     Next,
     Previous,
 
+    // Playback options
+    Random,
+    Repeat,
+    Single,
+    Consume,
+
     // Volume
     VolumeUp,
     VolumeDown,
@@ -62,9 +82,13 @@ pub enum MPDAction {
 
     // Queue options
     ClearQueue,
-    Random,
-    Repeat,
-    Single,
+    MoveUpInQueue,
+    MoveDownInQueue,
+
+    // Queue navigation
+    QueueUp,
+    QueueDown,
+    PlaySelected,
 
     // Application
     Quit,
@@ -147,7 +171,19 @@ impl MPDAction {
                 };
                 client.command(commands::SetSingle(new_single)).await?;
             }
-            MPDAction::Quit | MPDAction::Refresh => {
+            MPDAction::Consume => {
+                let status = client.command(commands::Status).await?;
+                client
+                    .command(commands::SetConsume(!status.consume))
+                    .await?;
+            }
+            MPDAction::QueueUp
+            | MPDAction::QueueDown
+            | MPDAction::PlaySelected
+            | MPDAction::Quit
+            | MPDAction::Refresh
+            | MPDAction::MoveUpInQueue
+            | MPDAction::MoveDownInQueue => {
                 // These are handled by the main application
             }
         }

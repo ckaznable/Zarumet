@@ -7,9 +7,44 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 use ratatui_image::{Resize, StatefulImage, protocol::StatefulProtocol};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::Config;
 use crate::song::SongInfo;
+
+/// Truncate a string to fit within the given display width, handling Unicode properly
+fn truncate_by_width(s: &str, max_width: usize) -> String {
+    let mut result = String::new();
+    let mut current_width = 0;
+    
+    for ch in s.chars() {
+        let char_width = ch.width().unwrap_or(0);
+        if current_width + char_width > max_width {
+            break;
+        }
+        result.push(ch);
+        current_width += char_width;
+    }
+    
+    // Pad with spaces if needed
+    while current_width < max_width {
+        result.push(' ');
+        current_width += 1;
+    }
+    
+    result
+}
+
+/// Left-align a string within given width, handling Unicode properly
+fn left_align(s: &str, width: usize) -> String {
+    let display_width = s.width();
+    if display_width >= width {
+        return truncate_by_width(s, width);
+    }
+    
+    let padding = width - display_width;
+    format!("{}{}", s, " ".repeat(padding))
+}
 
 pub struct Protocol {
     pub image: Option<StatefulProtocol>,
@@ -21,6 +56,7 @@ pub fn render(
     protocol: &mut Protocol,
     current_song: &Option<SongInfo>,
     queue: &[SongInfo],
+    selected_queue_index: Option<usize>,
     config: &Config,
 ) {
     let area = frame.area();
@@ -69,7 +105,7 @@ pub fn render(
     frame.render_widget(middle_box, main_vertical_chunks[1]);
 
     // Render widgets in left vertical split
-    let left_box_top = create_left_box_top(queue, config, left_vertical_chunks[0]);
+    let left_box_top = create_left_box_top(queue, selected_queue_index, current_song, config, left_vertical_chunks[0]);
     frame.render_widget(left_box_top, left_vertical_chunks[0]);
 
     // Render widgets in left vertical split
@@ -244,7 +280,7 @@ fn create_left_box_bottom(
     }
 }
 
-fn create_left_box_top<'a>(queue: &[SongInfo], config: &Config, area: Rect) -> Paragraph<'a> {
+fn create_left_box_top<'a>(queue: &[SongInfo], selected_queue_index: Option<usize>, current_song: &Option<SongInfo>, config: &Config, area: Rect) -> Paragraph<'a> {
     let border_color = config.colors.border_color();
     let border_title_color = config.colors.border_title_color();
     let text_color = config.colors.song_title_color();
@@ -252,20 +288,22 @@ fn create_left_box_top<'a>(queue: &[SongInfo], config: &Config, area: Rect) -> P
     // Calculate available width inside the box (minus borders and padding)
     let inner_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
 
-    let queue_text = if queue.is_empty() {
-        "".to_string()
+    let queue_lines = if queue.is_empty() {
+        vec![]
     } else {
         queue
             .iter()
             .take((area.height.saturating_sub(3) as usize).max(1)) // Use full height minus borders/title
             .enumerate()
             .map(|(i, song)| {
-                // Calculate dynamic column widths based on available space
+                // Calculate available width for the entire line
                 let num_width = 3; // "#. "
                 let separator_width = 3; // " | "
                 let duration_display_width = 8; // " (MM:SS)"
-                let remaining_width = inner_width
-                    .saturating_sub(num_width + separator_width * 2 + duration_display_width);
+                let remaining_width = inner_width.saturating_sub(num_width + separator_width * 2 + duration_display_width);
+
+                // Split remaining width into 3 equal parts for title, artist, album
+                let field_width = remaining_width / 3;
 
                 // Format duration if available
                 let duration_str = match song.duration {
@@ -278,44 +316,55 @@ fn create_left_box_top<'a>(queue: &[SongInfo], config: &Config, area: Rect) -> P
                     None => " (--:--)".to_string(),
                 };
 
-                // Split remaining width between title, artist, album
-                let title_width = (remaining_width * 40) / 100; // 40% for title
-                let artist_width = (remaining_width * 25) / 100; // 25% for artist
-                let album_width = remaining_width - title_width - artist_width; // 35% for album
+                // Truncate each field to its allocated width using Unicode-aware width
+                let field_width_max = field_width.max(8);
+                let title = left_align(&song.title, field_width_max);
+                let artist = left_align(&song.artist, field_width_max);
+                let album = left_align(&song.album, field_width_max);
 
-                let title = song
-                    .title
-                    .chars()
-                    .take(title_width.max(10))
-                    .collect::<String>();
-                let artist = song
-                    .artist
-                    .chars()
-                    .take(artist_width.max(8))
-                    .collect::<String>();
-                let album = song
-                    .album
-                    .chars()
-                    .take(album_width.max(8))
-                    .collect::<String>();
+                // Check if this is the currently playing song
+                let is_currently_playing = current_song
+                    .as_ref()
+                    .map(|current| current.file_path == song.file_path)
+                    .unwrap_or(false);
+                
+                // Check if this is the selected song
+                let is_selected = selected_queue_index == Some(i);
 
-                format!(
-                    "{}. {:<title_width$} | {:<artist_width$} | {:<album_width$}{}",
-                    i + 1,
-                    title,
-                    artist,
-                    album,
-                    duration_str,
-                    title_width = title_width,
-                    artist_width = artist_width,
-                    album_width = album_width
-                )
+                // Create base style
+                let mut base_style = Style::default().fg(text_color);
+                
+                // Apply background highlight for selected song
+                if is_selected {
+                    base_style = base_style.bg(config.colors.border_color()).fg(config.colors.border_title_color());
+                }
+
+                // Create spans with appropriate styling
+                let num_str = format!("{}. ", i + 1);
+                let mut spans = vec![
+                    Span::styled(num_str, base_style),
+                ];
+
+                // Apply bold-italics to currently playing song content
+                let content_style = if is_currently_playing {
+                    base_style.bold().italic()
+                } else {
+                    base_style
+                };
+
+                spans.push(Span::styled(title, content_style));
+                spans.push(Span::styled(" | ", base_style));
+                spans.push(Span::styled(artist, content_style));
+                spans.push(Span::styled(" | ", base_style));
+                spans.push(Span::styled(album, content_style));
+                spans.push(Span::styled(duration_str, base_style));
+
+                Line::from(spans)
             })
             .collect::<Vec<_>>()
-            .join("\n")
     };
 
-    Paragraph::new(queue_text)
+    Paragraph::new(queue_lines)
         .block(
             Block::default()
                 .border_type(BorderType::Rounded)
