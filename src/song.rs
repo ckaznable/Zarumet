@@ -37,6 +37,7 @@ impl SongInfo {
 
         let file_path = song.file_path().to_path_buf();
         let format = song.format.clone();
+        let duration = song.duration;
 
         Self {
             title,
@@ -47,7 +48,7 @@ impl SongInfo {
             play_state: None,
             progress: None,
             elapsed: None,
-            duration: None,
+            duration,
         }
     }
     pub async fn set_max_art_size(client: &Client, size_bytes: usize) -> Result<(), CommandError> {

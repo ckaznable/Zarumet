@@ -20,6 +20,7 @@ pub fn render(
     frame: &mut Frame<'_>,
     protocol: &mut Protocol,
     current_song: &Option<SongInfo>,
+    queue: &[SongInfo],
     config: &Config,
 ) {
     let area = frame.area();
@@ -68,7 +69,7 @@ pub fn render(
     frame.render_widget(middle_box, main_vertical_chunks[1]);
 
     // Render widgets in left vertical split
-    let left_box_top = create_left_box_top(config);
+    let left_box_top = create_left_box_top(queue, config, left_vertical_chunks[0]);
     frame.render_widget(left_box_top, left_vertical_chunks[0]);
 
     // Render widgets in left vertical split
@@ -243,22 +244,90 @@ fn create_left_box_bottom(
     }
 }
 
-fn create_left_box_top<'a>(config: &Config) -> Paragraph<'a> {
+fn create_left_box_top<'a>(queue: &[SongInfo], config: &Config, area: Rect) -> Paragraph<'a> {
     let border_color = config.colors.border_color();
     let border_title_color = config.colors.border_title_color();
+    let text_color = config.colors.song_title_color();
 
-    Paragraph::new("Controls\n\n↑/↓ - Volume\n←/→ - Seek\nSpace - Play/Pause\nq - Quit")
+    // Calculate available width inside the box (minus borders and padding)
+    let inner_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
+
+    let queue_text = if queue.is_empty() {
+        "Queue is empty".to_string()
+    } else {
+        queue
+            .iter()
+            .take((area.height.saturating_sub(3) as usize).max(1)) // Use full height minus borders/title
+            .enumerate()
+            .map(|(i, song)| {
+                // Calculate dynamic column widths based on available space
+                let num_width = 3; // "#. "
+                let separator_width = 3; // " | "
+                let duration_display_width = 8; // " (MM:SS)"
+                let remaining_width = inner_width
+                    .saturating_sub(num_width + separator_width * 2 + duration_display_width);
+
+                // Format duration if available
+                let duration_str = match song.duration {
+                    Some(duration) => {
+                        let total_seconds = duration.as_secs();
+                        let minutes = total_seconds / 60;
+                        let seconds = total_seconds % 60;
+                        format!(" ({:02}:{:02})", minutes, seconds)
+                    }
+                    None => " (--:--)".to_string(),
+                };
+
+                // Split remaining width between title, artist, album
+                let title_width = (remaining_width * 40) / 100; // 40% for title
+                let artist_width = (remaining_width * 25) / 100; // 25% for artist
+                let album_width = remaining_width - title_width - artist_width; // 35% for album
+
+                let title = song
+                    .title
+                    .chars()
+                    .take(title_width.max(10))
+                    .collect::<String>();
+                let artist = song
+                    .artist
+                    .chars()
+                    .take(artist_width.max(8))
+                    .collect::<String>();
+                let album = song
+                    .album
+                    .chars()
+                    .take(album_width.max(8))
+                    .collect::<String>();
+
+                format!(
+                    "{}. {:<title_width$} | {:<artist_width$} | {:<album_width$}{}",
+                    i + 1,
+                    title,
+                    artist,
+                    album,
+                    duration_str,
+                    title_width = title_width,
+                    artist_width = artist_width,
+                    album_width = album_width
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    Paragraph::new(queue_text)
         .block(
             Block::default()
                 .border_type(BorderType::Rounded)
                 .borders(Borders::ALL)
                 .title(Span::styled(
-                    " Controls ",
+                    " Queue ",
                     Style::default().fg(border_title_color),
                 ))
                 .border_style(Style::default().fg(border_color)),
         )
-        .centered()
+        .style(Style::default().fg(text_color))
+        .left_aligned()
 }
 
 /// Create the middle box widget that spans both splits

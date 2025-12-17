@@ -40,6 +40,8 @@ pub struct App {
     running: bool,
     /// Current song information
     current_song: Option<SongInfo>,
+    /// MPD queue information
+    queue: Vec<SongInfo>,
     /// Configuration loaded from TOML file
     config: Config,
 }
@@ -56,6 +58,7 @@ impl App {
         Ok(Self {
             running: false,
             current_song: None,
+            queue: Vec::new(),
             config,
         })
     }
@@ -106,8 +109,15 @@ impl App {
         };
 
         while self.running {
-            terminal
-                .draw(|frame| ui::render(frame, &mut protocol, &self.current_song, &self.config))?;
+            terminal.draw(|frame| {
+                ui::render(
+                    frame,
+                    &mut protocol,
+                    &self.current_song,
+                    &self.queue,
+                    &self.config,
+                )
+            })?;
 
             if let Some(ref mut img) = protocol.image {
                 img.last_encoding_result();
@@ -118,9 +128,8 @@ impl App {
                 self.handle_crossterm_events()?;
             }
 
-            // Update song info and status periodically
-            self.update_current_song(&client).await?;
-            self.update_status(&client).await?;
+            // Update song info, queue, and status periodically
+            self.run_updates(&client).await?;
 
             // Check if the song changed (not just the image path)
             let new_song_file: Option<PathBuf> = self
@@ -167,28 +176,43 @@ impl App {
         Ok(())
     }
 
-    /// Update the MPD status (playback state)
-    async fn update_status(&mut self, client: &Client) -> color_eyre::Result<()> {
-        match client.command(commands::Status).await {
-            Ok(status) => {
-                let progress = match (status.elapsed, status.duration) {
-                    (Some(elapsed), Some(duration)) => {
-                        Some(elapsed.as_secs_f64() / duration.as_secs_f64())
-                    }
-                    _ => None,
-                };
+    /// Run update functions concurrently with optimized result processing
+    async fn run_updates(&mut self, client: &Client) -> color_eyre::Result<()> {
+        // Run MPD commands concurrently
+        let (current_song_result, queue_songs, status) = tokio::try_join!(
+            client.command(commands::CurrentSong),
+            client.command(commands::Queue),
+            client.command(commands::Status)
+        )?;
 
-                if let Some(ref mut song) = self.current_song {
-                    song.update_playback_info(Some(status.state), progress);
-                    song.update_time_info(status.elapsed, status.duration);
-                }
-                Ok(())
+        // Process current song result
+        match current_song_result {
+            Some(song_in_queue) => {
+                self.current_song = Some(SongInfo::from_song(&song_in_queue.song));
             }
-            Err(_) => {
-                // Keep the previous status on error
-                Ok(())
+            None => {
+                self.current_song = None;
             }
         }
+
+        // Process queue result
+        self.queue = queue_songs
+            .into_iter()
+            .map(|song_in_queue| SongInfo::from_song(&song_in_queue.song))
+            .collect();
+
+        // Process status result
+        let progress = match (status.elapsed, status.duration) {
+            (Some(elapsed), Some(duration)) => Some(elapsed.as_secs_f64() / duration.as_secs_f64()),
+            _ => None,
+        };
+
+        if let Some(ref mut song) = self.current_song {
+            song.update_playback_info(Some(status.state), progress);
+            song.update_time_info(status.elapsed, status.duration);
+        }
+
+        Ok(())
     }
 
     /// Reads the crossterm events and updates the state of [`App`].
