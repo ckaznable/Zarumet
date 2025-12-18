@@ -75,14 +75,14 @@ impl App {
             config.mpd.address = address;
         }
 
-        let mut queue_list_state = ListState::default();
-        queue_list_state.select(Some(0)); // Select top song by default
+        let queue_list_state = ListState::default();
+        // Don't select anything initially - will be set when queue is populated
         
         Ok(Self {
             running: false,
             current_song: None,
             queue: Vec::new(),
-            selected_queue_index: Some(0), // Select top song by default
+            selected_queue_index: None, // Will be set when queue is populated
             queue_list_state,
             config,
         })
@@ -227,13 +227,22 @@ impl App {
             .map(|song_in_queue| SongInfo::from_song(&song_in_queue.song))
             .collect();
 
-        // Update selected index to stay within bounds
-        if let Some(selected) = self.queue_list_state.selected() {
-            if selected >= self.queue.len() {
-                if self.queue.is_empty() {
-                    self.queue_list_state.select(None);
-                } else {
-                    self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
+        // Update selected index to stay within bounds and select first item if queue was previously empty
+        match self.queue_list_state.selected() {
+            Some(selected) => {
+                // If we have a selection, keep it within bounds
+                if selected >= self.queue.len() {
+                    if self.queue.is_empty() {
+                        self.queue_list_state.select(None);
+                    } else {
+                        self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
+                    }
+                }
+            }
+            None => {
+                // If we have no selection and queue is not empty, select first item
+                if !self.queue.is_empty() {
+                    self.queue_list_state.select(Some(0));
                 }
             }
         }
