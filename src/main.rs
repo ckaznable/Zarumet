@@ -406,8 +406,8 @@ impl App {
                 MPDAction::SwitchToQueueMenu => {
                     self.menu_mode = MenuMode::Queue;
                 }
-                MPDAction::SwitchToTwoVerticalBlocks => {
-                    self.menu_mode = MenuMode::TwoVerticalBlocks;
+                MPDAction::SwitchToTracks => {
+                    self.menu_mode = MenuMode::Tracks;
                 }
                 _ => {
                     // Execute MPD command for other actions

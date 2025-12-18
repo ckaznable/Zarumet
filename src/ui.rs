@@ -159,7 +159,7 @@ pub fn render(
             let song_widget = create_song_widget(current_song, config);
             frame.render_widget(song_widget, right_vertical_chunks[1]);
         }
-        MenuMode::TwoVerticalBlocks => {
+        MenuMode::Tracks => {
             // Same as original layout, but replace queue box with 2 side-by-side boxes
             // Split area vertically: top section, middle section, bottom section
             let main_vertical_chunks = Layout::vertical([

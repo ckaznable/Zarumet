@@ -2,5 +2,5 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuMode {
     Queue,
-    TwoVerticalBlocks,
+    Tracks,
 }
