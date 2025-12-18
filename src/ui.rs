@@ -228,11 +228,7 @@ pub fn render(
                             .border_type(BorderType::Rounded)
                             .title(Span::styled(
                                 " Artists ",
-                                Style::default().fg(if panel_focus == &PanelFocus::Artists {
-                                    config.colors.queue_selected_highlight_color()
-                                } else {
-                                    config.colors.border_title_color()
-                                }),
+                                Style::default().fg(config.colors.border_title_color()),
                             ))
                             .border_style(artists_border_style),
                     )
@@ -256,8 +252,11 @@ pub fn render(
                 (library, artist_list_state.selected())
             {
                 if let Some(selected_artist) = library.artists.get(selected_artist_index) {
-                    // Initialize album selection if needed
-                    if album_list_state.selected().is_none() && !selected_artist.albums.is_empty() {
+                    // Only initialize album selection if albums panel is focused
+                    if album_list_state.selected().is_none()
+                        && panel_focus == &PanelFocus::Albums
+                        && !selected_artist.albums.is_empty()
+                    {
                         album_list_state.select(Some(0));
                     }
 
@@ -266,7 +265,34 @@ pub fn render(
                         .iter()
                         .enumerate()
                         .map(|(_i, album)| {
-                            let display_text = format!("{}", album.name);
+                            // Format total duration
+                            let duration_str = match album.total_duration() {
+                                Some(duration) => {
+                                    let total_seconds = duration.as_secs();
+                                    let hours = total_seconds / 3600;
+                                    let minutes = (total_seconds % 3600) / 60;
+                                    let seconds = total_seconds % 60;
+
+                                    if hours > 0 {
+                                        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+                                    } else {
+                                        format!("{:02}:{:02}", minutes, seconds)
+                                    }
+                                }
+                                None => "--:--".to_string(),
+                            };
+
+                            // Calculate available width for filler (subtract album name width and duration width + spaces)
+                            let album_name_width = album.name.width();
+                            let duration_width = duration_str.width();
+                            let available_width =
+                                left_horizontal_chunks[1].width.saturating_sub(4) as usize; // 4 for borders/padding
+                            let filler_width = available_width
+                                .saturating_sub(album_name_width + duration_width + 3); // 3 for "  " between name and duration
+
+                            let filler = "─".repeat(filler_width.max(0));
+                            let display_text =
+                                format!("{}  {}  {}", album.name, filler, duration_str);
                             ListItem::new(vec![Line::from(display_text)])
                         })
                         .collect();
@@ -277,18 +303,17 @@ pub fn render(
                         config.colors.border_color()
                     };
 
-                    let albums_title_color = if panel_focus == &PanelFocus::Albums {
-                        config.colors.queue_selected_highlight_color()
-                    } else {
-                        config.colors.border_title_color()
-                    };
+                    let albums_title_color = config.colors.border_title_color();
 
                     let albums_list_widget = List::new(albums_list)
                         .block(
                             Block::default()
                                 .borders(Borders::ALL)
                                 .border_type(BorderType::Rounded)
-                                .title(Span::styled(" Albums ", Style::default().fg(albums_title_color)))
+                                .title(Span::styled(
+                                    " Albums ",
+                                    Style::default().fg(albums_title_color),
+                                ))
                                 .border_style(Style::default().fg(albums_border_color)),
                         )
                         .highlight_style(

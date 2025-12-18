@@ -457,6 +457,8 @@ impl App {
                         }
                         menu::PanelFocus::Albums => {
                             self.panel_focus = menu::PanelFocus::Artists;
+                            // Clear album selection when switching to artists panel
+                            self.album_list_state.select(None);
                         }
                     }
                 }
@@ -464,6 +466,16 @@ impl App {
                     match self.panel_focus {
                         menu::PanelFocus::Artists => {
                             self.panel_focus = menu::PanelFocus::Albums;
+                            // Initialize album selection when switching to albums panel
+                            if let Some(ref library) = self.library {
+                                if let Some(selected_artist_index) = self.artist_list_state.selected() {
+                                    if let Some(selected_artist) = library.artists.get(selected_artist_index) {
+                                        if !selected_artist.albums.is_empty() {
+                                            self.album_list_state.select(Some(0));
+                                        }
+                                    }
+                                }
+                            }
                         }
                         menu::PanelFocus::Albums => {
                             // Already at albums panel, can't go right
@@ -484,6 +496,8 @@ impl App {
                                         self.artist_list_state
                                             .select(Some(library.artists.len().saturating_sub(1)));
                                     }
+                                    // Clear album selection when navigating artists
+                                    self.album_list_state.select(None);
                                 }
                             }
                         }
@@ -520,6 +534,8 @@ impl App {
                                         // Wrap around to the top
                                         self.artist_list_state.select(Some(0));
                                     }
+                                    // Clear album selection when navigating artists
+                                    self.album_list_state.select(None);
                                 }
                             }
                         }

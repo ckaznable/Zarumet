@@ -93,6 +93,27 @@ pub struct Album {
     pub tracks: Vec<SongInfo>,
 }
 
+impl Album {
+    /// Calculate the total duration of all tracks in the album
+    pub fn total_duration(&self) -> Option<std::time::Duration> {
+        let mut total_secs = 0u64;
+        let mut has_duration = false;
+        
+        for track in &self.tracks {
+            if let Some(duration) = track.duration {
+                total_secs += duration.as_secs();
+                has_duration = true;
+            }
+        }
+        
+        if has_duration {
+            Some(std::time::Duration::from_secs(total_secs))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Artist {
     pub name: String,
