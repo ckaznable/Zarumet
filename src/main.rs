@@ -8,7 +8,7 @@ use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyEvent, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use futures::executor::block_on;
 use mpd_client::{Client, commands};
@@ -19,11 +19,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::net::TcpStream;
 
+use binds::{KeyBinds, MPDAction};
 use cli::Args;
 use config::Config;
 use song::SongInfo;
 use ui::Protocol;
-use binds::{KeyBinds, MPDAction};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -33,20 +33,15 @@ async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
     // Initialize terminal with explicit crossterm configuration for full control
-    execute!(
-        std::io::stdout(),
-        EnterAlternateScreen
-    )?;
+    execute!(std::io::stdout(), EnterAlternateScreen)?;
     enable_raw_mode()?;
-    
-    let terminal = ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
+
+    let terminal =
+        ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
     let result = App::new(args)?.run(terminal).await;
-    
+
     // Restore terminal
-    execute!(
-        std::io::stdout(),
-        LeaveAlternateScreen
-    )?;
+    execute!(std::io::stdout(), LeaveAlternateScreen)?;
     disable_raw_mode()?;
     result
 }
@@ -146,7 +141,7 @@ impl App {
             }
 
             // Poll for events with a timeout to allow periodic updates
-            if event::poll(Duration::from_millis(100))? {
+            if event::poll(Duration::from_millis(10))? {
                 self.handle_crossterm_events(&client).await?;
             }
 
@@ -222,7 +217,7 @@ impl App {
             .into_iter()
             .map(|song_in_queue| SongInfo::from_song(&song_in_queue.song))
             .collect();
-        
+
         // Update selected index to stay within bounds
         if let Some(selected) = self.selected_queue_index {
             if selected >= self.queue.len() {
@@ -249,7 +244,10 @@ impl App {
     }
 
     /// Reads the crossterm events and updates the state of [`App`].
-    async fn handle_crossterm_events(&mut self, client: &mpd_client::Client) -> color_eyre::Result<()> {
+    async fn handle_crossterm_events(
+        &mut self,
+        client: &mpd_client::Client,
+    ) -> color_eyre::Result<()> {
         // Try direct event reading to bypass any terminal interference
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
@@ -263,25 +261,46 @@ impl App {
     }
 
     /// Handles the key events and updates the state of [`App`].
-    async fn on_key_event(&mut self, key: KeyEvent, client: &mpd_client::Client) -> color_eyre::Result<()> {
+    async fn on_key_event(
+        &mut self,
+        key: KeyEvent,
+        client: &mpd_client::Client,
+    ) -> color_eyre::Result<()> {
         if let Some(action) = KeyBinds::handle_key(key) {
             match action {
                 MPDAction::QueueUp => {
-                    if let Some(selected) = self.selected_queue_index {
-                        if selected > 0 {
-                            self.selected_queue_index = Some(selected - 1);
+                    if !self.queue.is_empty() {
+                        match self.selected_queue_index {
+                            Some(selected) => {
+                                if selected > 0 {
+                                    self.selected_queue_index = Some(selected - 1);
+                                } else {
+                                    // Wrap around to the bottom
+                                    self.selected_queue_index =
+                                        Some(self.queue.len().saturating_sub(1));
+                                }
+                            }
+                            None => {
+                                self.selected_queue_index = Some(0);
+                            }
                         }
-                    } else if !self.queue.is_empty() {
-                        self.selected_queue_index = Some(0);
                     }
                 }
                 MPDAction::QueueDown => {
-                    if let Some(selected) = self.selected_queue_index {
-                        if selected < self.queue.len().saturating_sub(1) {
-                            self.selected_queue_index = Some(selected + 1);
+                    if !self.queue.is_empty() {
+                        match self.selected_queue_index {
+                            Some(selected) => {
+                                if selected < self.queue.len().saturating_sub(1) {
+                                    self.selected_queue_index = Some(selected + 1);
+                                } else {
+                                    // Wrap around to the top
+                                    self.selected_queue_index = Some(0);
+                                }
+                            }
+                            None => {
+                                self.selected_queue_index = Some(0);
+                            }
                         }
-                    } else if !self.queue.is_empty() {
-                        self.selected_queue_index = Some(0);
                     }
                 }
                 MPDAction::PlaySelected => {
@@ -289,7 +308,10 @@ impl App {
                         if selected < self.queue.len() {
                             // Play the song at the selected position in the queue
                             let song_position: mpd_client::commands::SongPosition = selected.into();
-                            if let Err(e) = client.command(mpd_client::commands::Play::song(song_position)).await {
+                            if let Err(e) = client
+                                .command(mpd_client::commands::Play::song(song_position))
+                                .await
+                            {
                                 eprintln!("Error playing selected song: {}", e);
                             }
                         }
@@ -301,7 +323,13 @@ impl App {
                             // Move song up in queue (from position `selected` to `selected - 1`)
                             let from_pos: mpd_client::commands::SongPosition = selected.into();
                             let to_pos: mpd_client::commands::SongPosition = (selected - 1).into();
-                            if let Err(e) = client.command(mpd_client::commands::Move::position(from_pos).to_position(to_pos)).await {
+                            if let Err(e) = client
+                                .command(
+                                    mpd_client::commands::Move::position(from_pos)
+                                        .to_position(to_pos),
+                                )
+                                .await
+                            {
                                 eprintln!("Error moving song up in queue: {}", e);
                             } else {
                                 // Update selected index to follow the moved song
@@ -316,11 +344,40 @@ impl App {
                             // Move song down in queue (from position `selected` to `selected + 1`)
                             let from_pos: mpd_client::commands::SongPosition = selected.into();
                             let to_pos: mpd_client::commands::SongPosition = (selected + 1).into();
-                            if let Err(e) = client.command(mpd_client::commands::Move::position(from_pos).to_position(to_pos)).await {
+                            if let Err(e) = client
+                                .command(
+                                    mpd_client::commands::Move::position(from_pos)
+                                        .to_position(to_pos),
+                                )
+                                .await
+                            {
                                 eprintln!("Error moving song down in queue: {}", e);
                             } else {
                                 // Update selected index to follow the moved song
                                 self.selected_queue_index = Some(selected + 1);
+                            }
+                        }
+                    }
+                }
+
+                MPDAction::RemoveFromQueue => {
+                    if let Some(selected) = self.selected_queue_index {
+                        if selected < self.queue.len() {
+                            // Remove the selected song from queue
+                            let song_position: mpd_client::commands::SongPosition = selected.into();
+                            if let Err(e) = client
+                                .command(mpd_client::commands::Delete::position(song_position))
+                                .await
+                            {
+                                eprintln!("Error removing song from queue: {}", e);
+                            } else {
+                                // Update selected index to stay within bounds
+                                if self.queue.is_empty() {
+                                    self.selected_queue_index = None;
+                                } else if selected >= self.queue.len().saturating_sub(1) {
+                                    self.selected_queue_index =
+                                        Some(self.queue.len().saturating_sub(1));
+                                }
                             }
                         }
                     }

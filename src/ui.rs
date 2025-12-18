@@ -306,17 +306,29 @@ fn create_left_box_top<'a>(
     let queue_lines = if queue.is_empty() {
         vec![]
     } else {
+        // First, determine the maximum number width needed for proper alignment
+        let visible_count = (area.height.saturating_sub(3) as usize).max(1);
+        let max_num_width = queue
+            .iter()
+            .take(visible_count)
+            .enumerate()
+            .map(|(i, _)| {
+                let num_str = format!("{}. ", i + 1);
+                unicode_width::UnicodeWidthStr::width(&num_str as &str)
+            })
+            .max()
+            .unwrap_or(3); // fallback to 3 for single digit
+
         queue
             .iter()
-            .take((area.height.saturating_sub(3) as usize).max(1)) // Use full height minus borders/title
+            .take(visible_count) // Use full height minus borders/title
             .enumerate()
             .map(|(i, song)| {
-                // Calculate available width for the entire line
-                let num_width = 3; // "#. "
-                let separator_width = 3; // " | "
+                // Calculate available width for entire line using consistent max_num_width
+                let separator_width = 3; // " ║ "
                 let duration_display_width = 8; // " (MM:SS)"
                 let remaining_width = inner_width
-                    .saturating_sub(num_width + separator_width * 2 + duration_display_width);
+                    .saturating_sub(max_num_width + separator_width * 2 + duration_display_width);
 
                 // Split remaining width into 3 equal parts for title, artist, album
                 let field_width = remaining_width / 3;
@@ -344,8 +356,11 @@ fn create_left_box_top<'a>(
                     .map(|current| current.file_path == song.file_path)
                     .unwrap_or(false);
 
+                // Calculate actual index in the full queue
+                let actual_index = i;
+
                 // Check if this is the selected song
-                let is_selected = selected_queue_index == Some(i);
+                let is_selected = selected_queue_index == Some(actual_index);
 
                 // Create base style
                 let mut queue_album_color = Style::default().fg(queue_album_color);
@@ -388,16 +403,39 @@ fn create_left_box_top<'a>(
                 }
 
                 // Create spans with appropriate styling
-                let num_str = format!("{}. ", i + 1);
-                let mut spans = vec![Span::styled(num_str, pos_color)];
+                let actual_index = i;
+                let num_str = format!("{}. ", actual_index + 1);
+                let padded_num_str = format!("{:<width$}", num_str, width = max_num_width);
+                let mut spans = vec![Span::styled(padded_num_str, pos_color)];
 
                 // Each field should have its own style, but when selected should be overwritten by the selection styling
-                spans.push(Span::styled(title, queue_song_title_color));
+                spans.push(Span::styled(title.clone(), queue_song_title_color));
                 spans.push(Span::styled(" ║ ", text_color));
-                spans.push(Span::styled(artist, queue_artist_color));
+                spans.push(Span::styled(artist.clone(), queue_artist_color));
                 spans.push(Span::styled(" ║ ", text_color));
-                spans.push(Span::styled(album, queue_album_color));
-                spans.push(Span::styled(duration_str, duration_color));
+                spans.push(Span::styled(album.clone(), queue_album_color));
+                spans.push(Span::styled(duration_str.clone(), duration_color));
+
+                // If this row is selected, add padding to fill the entire width
+                if is_selected {
+                    // Calculate the current line width by reconstructing the line content
+                    let line_content = format!(
+                        "{}. {} ║ {} ║ {}{}",
+                        i + 1,
+                        title.clone(),
+                        artist.clone(),
+                        album.clone(),
+                        duration_str.clone()
+                    );
+                    let current_width =
+                        unicode_width::UnicodeWidthStr::width(&line_content as &str);
+                    let remaining_width = area.width.saturating_sub(current_width as u16) as usize;
+
+                    if remaining_width > 0 {
+                        // Add spaces to fill the remaining width with the selected background color
+                        spans.push(Span::styled(" ".repeat(remaining_width), text_color));
+                    }
+                }
 
                 Line::from(spans)
             })

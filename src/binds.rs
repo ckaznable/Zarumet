@@ -9,16 +9,23 @@ impl KeyBinds {
     pub fn handle_key(key: KeyEvent) -> Option<MPDAction> {
         match (key.modifiers, key.code) {
             // Playback controls
-            (_, KeyCode::Char(' ')) => Some(MPDAction::TogglePlayPause),
-            (_, KeyCode::Char('p')) => Some(MPDAction::TogglePlayPause),
-            (_, KeyCode::Char('x')) => Some(MPDAction::Stop),
-            (_, KeyCode::Char('>')) | (_, KeyCode::Char('n')) => Some(MPDAction::Next),
-            (_, KeyCode::Char('<')) | (_, KeyCode::Char('b')) => Some(MPDAction::Previous),
+            (KeyModifiers::NONE, KeyCode::Char(' ')) => Some(MPDAction::TogglePlayPause),
+            (KeyModifiers::NONE, KeyCode::Char('p')) => Some(MPDAction::TogglePlayPause),
+            (KeyModifiers::NONE, KeyCode::Char('>')) | (KeyModifiers::NONE, KeyCode::Char('n')) => {
+                Some(MPDAction::Next)
+            }
+            (KeyModifiers::NONE, KeyCode::Char('<')) | (KeyModifiers::NONE, KeyCode::Char('b')) => {
+                Some(MPDAction::Previous)
+            }
 
             // Volume controls
-            (_, KeyCode::Char('=')) | (_, KeyCode::Char('+')) => Some(MPDAction::VolumeUp),
-            (_, KeyCode::Char('-')) | (_, KeyCode::Char('_')) => Some(MPDAction::VolumeDown),
-            (_, KeyCode::Char('m')) => Some(MPDAction::ToggleMute),
+            (KeyModifiers::NONE, KeyCode::Char('=')) | (KeyModifiers::NONE, KeyCode::Char('+')) => {
+                Some(MPDAction::VolumeUp)
+            }
+            (KeyModifiers::NONE, KeyCode::Char('-')) | (KeyModifiers::NONE, KeyCode::Char('_')) => {
+                Some(MPDAction::VolumeDown)
+            }
+            (KeyModifiers::NONE, KeyCode::Char('m')) => Some(MPDAction::ToggleMute),
 
             // Seek controls
             (KeyModifiers::CONTROL, KeyCode::Char('l')) => Some(MPDAction::SeekForward),
@@ -31,25 +38,28 @@ impl KeyBinds {
             (KeyModifiers::CONTROL, KeyCode::Down) => Some(MPDAction::MoveDownInQueue),
 
             // Queue controls
-            (_, KeyCode::Char('d')) => Some(MPDAction::ClearQueue),
-            (_, KeyCode::Char('r')) => Some(MPDAction::Repeat),
-            (_, KeyCode::Char('z')) => Some(MPDAction::Random),
-            (_, KeyCode::Char('s')) => Some(MPDAction::Single),
-            (_, KeyCode::Char('c')) => Some(MPDAction::Consume),
+            (KeyModifiers::NONE, KeyCode::Char('d')) => Some(MPDAction::ClearQueue),
+            (KeyModifiers::NONE, KeyCode::Char('x')) => Some(MPDAction::RemoveFromQueue),
+            (KeyModifiers::NONE, KeyCode::Char('r')) => Some(MPDAction::Repeat),
+            (KeyModifiers::NONE, KeyCode::Char('z')) => Some(MPDAction::Random),
+            (KeyModifiers::NONE, KeyCode::Char('s')) => Some(MPDAction::Single),
+            (KeyModifiers::NONE, KeyCode::Char('c')) => Some(MPDAction::Consume),
 
             // Queue navigation
-            (_, KeyCode::Char('j')) => Some(MPDAction::QueueDown),
-            (_, KeyCode::Char('k')) => Some(MPDAction::QueueUp),
-            (_, KeyCode::Down) => Some(MPDAction::QueueDown),
-            (_, KeyCode::Up) => Some(MPDAction::QueueUp),
-            (_, KeyCode::Enter) => Some(MPDAction::PlaySelected),
-            (_, KeyCode::Char('l')) => Some(MPDAction::PlaySelected),
-            (_, KeyCode::Right) => Some(MPDAction::PlaySelected),
+            (KeyModifiers::NONE, KeyCode::Char('j')) => Some(MPDAction::QueueDown),
+            (KeyModifiers::NONE, KeyCode::Char('k')) => Some(MPDAction::QueueUp),
+            (KeyModifiers::NONE, KeyCode::Down) => Some(MPDAction::QueueDown),
+            (KeyModifiers::NONE, KeyCode::Up) => Some(MPDAction::QueueUp),
+            (KeyModifiers::NONE, KeyCode::Enter) => Some(MPDAction::PlaySelected),
+            (KeyModifiers::NONE, KeyCode::Char('l')) => Some(MPDAction::PlaySelected),
+            (KeyModifiers::NONE, KeyCode::Right) => Some(MPDAction::PlaySelected),
 
             // Application controls
-            (_, KeyCode::Esc) | (_, KeyCode::Char('q')) => Some(MPDAction::Quit),
+            (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Char('q')) => {
+                Some(MPDAction::Quit)
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('C')) => Some(MPDAction::Quit),
-            (_, KeyCode::Char('R')) => Some(MPDAction::Refresh),
+            (KeyModifiers::NONE, KeyCode::Char('R')) => Some(MPDAction::Refresh),
 
             _ => None,
         }
@@ -61,7 +71,6 @@ impl KeyBinds {
 pub enum MPDAction {
     // Playback
     TogglePlayPause,
-    Stop,
     Next,
     Previous,
 
@@ -82,6 +91,7 @@ pub enum MPDAction {
 
     // Queue options
     ClearQueue,
+    RemoveFromQueue,
     MoveUpInQueue,
     MoveDownInQueue,
 
@@ -109,9 +119,6 @@ impl MPDAction {
                         client.command(commands::Play::current()).await?;
                     }
                 }
-            }
-            MPDAction::Stop => {
-                client.command(commands::Stop).await?;
             }
             MPDAction::Next => {
                 client.command(commands::Next).await?;
@@ -153,6 +160,9 @@ impl MPDAction {
             }
             MPDAction::ClearQueue => {
                 client.command(commands::ClearQueue).await?;
+            }
+            MPDAction::RemoveFromQueue => {
+                // This is handled by the main application since it needs the selected index
             }
             MPDAction::Random => {
                 let status = client.command(commands::Status).await?;
