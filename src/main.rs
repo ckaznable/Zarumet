@@ -113,6 +113,9 @@ impl App {
             Err(e) => eprintln!("Failed to set MPD binary limit: {}", e),
         }
 
+        // Load library
+        self.library = Some(Library::load_library(&client).await?);
+
         // Set up the image picker and protocol
         let mut picker = Picker::from_query_stdio().unwrap();
         picker.set_background_color([0, 0, 0, 0]);

@@ -1,6 +1,7 @@
 use mpd_client::{
     Client,
     client::CommandError,
+    commands,
     commands::SetBinaryLimit,
     responses::{PlayState, Song},
 };
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 pub struct SongInfo {
     pub title: String,
     pub artist: String,
+    pub album_artist: String,
     pub album: String,
     pub file_path: PathBuf,
     pub format: Option<String>,
@@ -30,6 +32,11 @@ impl SongInfo {
             .first()
             .map(|s| s.to_string())
             .unwrap_or_else(|| "Unknown Artist".to_string());
+        let album_artist = song
+            .album_artists()
+            .first()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| artist.clone());
         let album = song
             .album()
             .map(|s| s.to_string())
@@ -42,6 +49,7 @@ impl SongInfo {
         Self {
             title,
             artist,
+            album_artist,
             album,
             file_path,
             format,
@@ -94,4 +102,55 @@ pub struct Artist {
 #[derive(Debug, Clone)]
 pub struct Library {
     pub artists: Vec<Artist>,
+}
+
+impl Library {
+    pub async fn load_library(client: &Client) -> color_eyre::Result<Self> {
+        let all_songs = client.command(commands::ListAllIn::root()).await?;
+
+        let mut artists_map: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, Vec<SongInfo>>,
+        > = std::collections::HashMap::new();
+
+        for song in all_songs {
+            let song_info = SongInfo::from_song(&song);
+            let artist_name = song_info.album_artist.clone();
+            let album_name = song_info.album.clone();
+
+            let artist_entry = artists_map
+                .entry(artist_name)
+                .or_insert_with(std::collections::HashMap::new);
+            let album_entry = artist_entry.entry(album_name).or_insert_with(Vec::new);
+            album_entry.push(song_info);
+        }
+
+        let mut artists: Vec<Artist> = artists_map
+            .into_iter()
+            .map(|(artist_name, albums_map)| Artist {
+                name: artist_name,
+                albums: albums_map
+                    .into_iter()
+                    .map(|(album_name, tracks)| Album {
+                        name: album_name,
+                        artist: tracks
+                            .first()
+                            .map(|t| t.album_artist.clone())
+                            .unwrap_or_else(|| "Unknown Artist".to_string()),
+                        tracks,
+                    })
+                    .collect(),
+            })
+            .collect();
+
+        artists.sort_by(|a, b| a.name.cmp(&b.name));
+        for artist in &mut artists {
+            artist.albums.sort_by(|a, b| a.name.cmp(&b.name));
+            for album in &mut artist.albums {
+                album.tracks.sort_by(|a, b| a.title.cmp(&b.title));
+            }
+        }
+
+        Ok(Library { artists })
+    }
 }

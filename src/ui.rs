@@ -11,8 +11,8 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::Config;
 use crate::menu::MenuMode;
-use crate::song::SongInfo;
 use crate::song::Library;
+use crate::song::SongInfo;
 
 /// Truncate a string to fit within the given display width, handling Unicode properly
 fn truncate_by_width(s: &str, max_width: usize) -> String {
@@ -206,7 +206,7 @@ pub fn render(
                     .artists
                     .iter()
                     .enumerate()
-                    .map(|(i, artist)| format!("{}. {}", i + 1, artist.name))
+                    .map(|(i, artist)| format!("{}", artist.name))
                     .collect::<Vec<_>>()
                     .join("\n");
 
