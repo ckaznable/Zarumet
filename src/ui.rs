@@ -292,8 +292,11 @@ pub fn render(
 
                             let filler = "─".repeat(filler_width.max(0));
                             let display_text =
-                                format!("{}  {}  {}", album.name, filler, duration_str);
-                            ListItem::new(vec![Line::from(display_text)])
+                                format!("{}{}     {}", album.name, filler, duration_str);
+                            ListItem::new(vec![
+                                Line::from(display_text)
+                                    .style(Style::default().fg(config.colors.album_color())),
+                            ])
                         })
                         .collect();
 
