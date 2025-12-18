@@ -700,6 +700,20 @@ impl App {
                         }
                     }
                 }
+                MPDAction::CycleModeLeft => {
+                    // Cycle modes left: Queue -> Tracks -> Queue
+                    self.menu_mode = match self.menu_mode {
+                        MenuMode::Queue => MenuMode::Tracks,
+                        MenuMode::Tracks => MenuMode::Queue,
+                    };
+                }
+                MPDAction::CycleModeRight => {
+                    // Cycle modes right: Queue -> Tracks -> Queue  
+                    self.menu_mode = match self.menu_mode {
+                        MenuMode::Queue => MenuMode::Tracks,
+                        MenuMode::Tracks => MenuMode::Queue,
+                    };
+                }
                 _ => {
                     // Execute MPD command for other actions
                     if let Err(e) = action.execute(client).await {
