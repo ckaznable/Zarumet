@@ -73,6 +73,10 @@ pub struct App {
     panel_focus: menu::PanelFocus,
     /// Music library
     library: Option<Library>,
+    /// Expanded albums (tracks which albums are currently expanded)
+    expanded_albums: std::collections::HashSet<(String, String)>, // (artist_name, album_name)
+    /// Selected song in expanded album (artist, album, song_index)
+    selected_song_in_expanded_album: Option<(String, String, usize)>,
 }
 
 impl App {
@@ -100,6 +104,8 @@ impl App {
             menu_mode: MenuMode::Queue, // Start with queue menu
             panel_focus: menu::PanelFocus::Artists, // Start with artists panel focused
             library: None,
+            expanded_albums: std::collections::HashSet::new(),
+            selected_song_in_expanded_album: None,
         })
     }
 
@@ -172,6 +178,7 @@ impl App {
                     &mut self.artist_list_state,
                     &mut self.album_list_state,
                     &self.panel_focus,
+                    &self.expanded_albums,
                 )
             })?;
 
@@ -563,6 +570,46 @@ impl App {
                                         } else {
                                             // Wrap around to top
                                             self.album_list_state.select(Some(0));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                MPDAction::ToggleAlbumExpansion => {
+                    if let (Some(library), Some(selected_artist_index), Some(selected_album_index)) =
+                        (&self.library, self.artist_list_state.selected(), self.album_list_state.selected())
+                    {
+                        if let Some(selected_artist) = library.artists.get(selected_artist_index) {
+                            if let Some(selected_album) = selected_artist.albums.get(selected_album_index) {
+                                // Check if album is expanded and if this might be a song selection
+                                let album_key = (selected_artist.name.clone(), selected_album.name.clone());
+                                
+                                if self.expanded_albums.contains(&album_key) {
+                                    // Album is expanded - we need to determine if this is a song selection
+                                    // For now, let's just close the album when 'l' is pressed on it again
+                                    self.expanded_albums.remove(&album_key);
+                                } else {
+                                    // Album is not expanded - expand it
+                                    self.expanded_albums.insert(album_key);
+                                }
+                            }
+                        }
+                    }
+                }
+                MPDAction::AddSongToQueue => {
+                    if let (Some(library), Some(selected_artist_index)) =
+                        (&self.library, self.artist_list_state.selected())
+                    {
+                        if let Some(selected_artist) = library.artists.get(selected_artist_index) {
+                            // For now, add all songs from the selected album to queue
+                            if let Some(selected_album_index) = self.album_list_state.selected() {
+                                if let Some(selected_album) = selected_artist.albums.get(selected_album_index) {
+                                    // Add all songs from the album to queue
+                                    for song in &selected_album.tracks {
+                                        if let Err(e) = client.command(commands::Add::uri(song.file_path.to_str().unwrap())).await {
+                                            eprintln!("Error adding song to queue: {}", e);
                                         }
                                     }
                                 }

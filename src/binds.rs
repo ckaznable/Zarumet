@@ -80,13 +80,19 @@ impl KeyBinds {
     }
 
     /// Handle keys specific to Tracks mode
-    fn handle_tracks_mode_key(key: KeyEvent, _panel_focus: &PanelFocus) -> Option<MPDAction> {
+    fn handle_tracks_mode_key(key: KeyEvent, panel_focus: &PanelFocus) -> Option<MPDAction> {
         match (key.modifiers, key.code) {
             // Panel switching
             (KeyModifiers::NONE, KeyCode::Char('h')) => Some(MPDAction::SwitchPanelLeft),
-            (KeyModifiers::NONE, KeyCode::Char('l')) => Some(MPDAction::SwitchPanelRight),
             (KeyModifiers::NONE, KeyCode::Left) => Some(MPDAction::SwitchPanelLeft),
-            (KeyModifiers::NONE, KeyCode::Right) => Some(MPDAction::SwitchPanelRight),
+            
+            // Right navigation - different behavior based on panel focus
+            (KeyModifiers::NONE, KeyCode::Char('l')) | (KeyModifiers::NONE, KeyCode::Right) => {
+                match panel_focus {
+                    PanelFocus::Artists => Some(MPDAction::SwitchPanelRight),
+                    PanelFocus::Albums => Some(MPDAction::ToggleAlbumExpansion),
+                }
+            }
             
             // Navigation (up/down)
             (KeyModifiers::NONE, KeyCode::Char('j')) => Some(MPDAction::NavigateDown),
@@ -96,6 +102,7 @@ impl KeyBinds {
             
             // Action keys
             (KeyModifiers::NONE, KeyCode::Enter) => Some(MPDAction::PlaySelected),
+            (KeyModifiers::NONE, KeyCode::Char('a')) => Some(MPDAction::AddSongToQueue),
             
             _ => None,
         }
@@ -151,6 +158,10 @@ pub enum MPDAction {
     // Panel-specific navigation
     NavigateUp,
     NavigateDown,
+    
+    // Album expansion
+    ToggleAlbumExpansion,
+    AddSongToQueue,
 }
 
 impl MPDAction {
@@ -244,10 +255,12 @@ impl MPDAction {
             | MPDAction::MoveDownInQueue
             | MPDAction::SwitchToQueueMenu
             | MPDAction::SwitchToTracks
-            | MPDAction::SwitchPanelLeft
+            |             MPDAction::SwitchPanelLeft
             | MPDAction::SwitchPanelRight
             | MPDAction::NavigateUp
-            | MPDAction::NavigateDown => {
+            | MPDAction::NavigateDown
+            | MPDAction::ToggleAlbumExpansion
+            | MPDAction::AddSongToQueue => {
                 // These are handled by the main application
             }
         }
