@@ -542,13 +542,14 @@ impl App {
                                         }
 
                                         // Update the legacy album_list_state to point to the current album if on album
-                                        if let Some(display_item) = display_items.get(current - 1) {
+                                        let wrapped_index = if current > 0 { current - 1 } else { display_items.len().saturating_sub(1) };
+                                        if let Some(display_item) = display_items.get(wrapped_index) {
                                             if let ui::DisplayItem::Album(_) = display_item {
                                                 // Find which album this corresponds to
                                                 let mut album_count = 0;
                                                 for (i, item) in display_items.iter().enumerate() {
                                                     if matches!(item, ui::DisplayItem::Album(_)) {
-                                                        if i == current - 1 {
+                                                        if i == wrapped_index {
                                                             self.album_list_state
                                                                 .select(Some(album_count));
                                                             break;
