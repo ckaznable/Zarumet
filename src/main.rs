@@ -64,6 +64,7 @@ pub struct App {
     /// List states for Tracks navigation
     artist_list_state: ListState,
     album_list_state: ListState,
+    album_display_list_state: ListState, // For handling expanded album navigation
     track_list_state: ListState,
     /// Configuration loaded from TOML file
     config: Config,
@@ -75,8 +76,6 @@ pub struct App {
     library: Option<Library>,
     /// Expanded albums (tracks which albums are currently expanded)
     expanded_albums: std::collections::HashSet<(String, String)>, // (artist_name, album_name)
-    /// Selected song in expanded album (artist, album, song_index)
-    selected_song_in_expanded_album: Option<(String, String, usize)>,
 }
 
 impl App {
@@ -99,13 +98,13 @@ impl App {
             queue_list_state,
             artist_list_state: ListState::default(),
             album_list_state: ListState::default(),
+            album_display_list_state: ListState::default(),
             track_list_state: ListState::default(),
             config,
             menu_mode: MenuMode::Queue, // Start with queue menu
             panel_focus: menu::PanelFocus::Artists, // Start with artists panel focused
             library: None,
             expanded_albums: std::collections::HashSet::new(),
-            selected_song_in_expanded_album: None,
         })
     }
 
@@ -177,6 +176,7 @@ impl App {
                     &self.library,
                     &mut self.artist_list_state,
                     &mut self.album_list_state,
+                    &mut self.album_display_list_state,
                     &self.panel_focus,
                     &self.expanded_albums,
                 )
@@ -466,6 +466,7 @@ impl App {
                             self.panel_focus = menu::PanelFocus::Artists;
                             // Clear album selection when switching to artists panel
                             self.album_list_state.select(None);
+                            self.album_display_list_state.select(None);
                         }
                     }
                 }
@@ -481,6 +482,8 @@ impl App {
                                     if let Some(selected_artist) =
                                         library.artists.get(selected_artist_index)
                                     {
+                                        // Initialize display list state
+                                        self.album_display_list_state.select(Some(0));
                                         if !selected_artist.albums.is_empty() {
                                             self.album_list_state.select(Some(0));
                                         }
@@ -500,35 +503,57 @@ impl App {
                             if let Some(ref library) = self.library {
                                 if !library.artists.is_empty() {
                                     let current = self.artist_list_state.selected().unwrap_or(0);
-                                    if current > 0 {
-                                        self.artist_list_state.select(Some(current - 1));
-                                    } else {
-                                        // Wrap around to the bottom
-                                        self.artist_list_state
-                                            .select(Some(library.artists.len().saturating_sub(1)));
-                                    }
-                                    // Clear album selection when navigating artists
-                                    self.album_list_state.select(None);
+                            if current > 0 {
+                                self.artist_list_state.select(Some(current - 1));
+                            } else {
+                                // Wrap around to the bottom
+                                self.artist_list_state
+                                    .select(Some(library.artists.len().saturating_sub(1)));
+                            }
+                            // Clear album selection when navigating artists
+                            self.album_list_state.select(None);
+                            self.album_display_list_state.select(None);
                                 }
                             }
                         }
                         menu::PanelFocus::Albums => {
-                            // Navigate albums list
+                            // Navigate albums list using display list state
                             if let (Some(library), Some(selected_artist_index)) =
                                 (&self.library, self.artist_list_state.selected())
                             {
                                 if let Some(selected_artist) =
                                     library.artists.get(selected_artist_index)
                                 {
-                                    if !selected_artist.albums.is_empty() {
-                                        let current = self.album_list_state.selected().unwrap_or(0);
+                                    // Compute display list to get total count
+                                    let (display_items, _album_indices) = 
+                                        ui::compute_album_display_list(selected_artist, &self.expanded_albums);
+                                    
+                                    if !display_items.is_empty() {
+                                        let current = self.album_display_list_state.selected().unwrap_or(0);
                                         if current > 0 {
-                                            self.album_list_state.select(Some(current - 1));
+                                            self.album_display_list_state.select(Some(current - 1));
                                         } else {
                                             // Wrap around to bottom
-                                            self.album_list_state.select(Some(
-                                                selected_artist.albums.len().saturating_sub(1),
+                                            self.album_display_list_state.select(Some(
+                                                display_items.len().saturating_sub(1),
                                             ));
+                                        }
+                                        
+                                        // Update the legacy album_list_state to point to the current album if on album
+                                        if let Some(display_item) = display_items.get(current - 1) {
+                                            if let ui::DisplayItem::Album(_) = display_item {
+                                                // Find which album this corresponds to
+                                                let mut album_count = 0;
+                                                for (i, item) in display_items.iter().enumerate() {
+                                                    if matches!(item, ui::DisplayItem::Album(_)) {
+                                                        if i == current - 1 {
+                                                            self.album_list_state.select(Some(album_count));
+                                                            break;
+                                                        }
+                                                        album_count += 1;
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -543,33 +568,54 @@ impl App {
                             if let Some(ref library) = self.library {
                                 if !library.artists.is_empty() {
                                     let current = self.artist_list_state.selected().unwrap_or(0);
-                                    if current < library.artists.len().saturating_sub(1) {
-                                        self.artist_list_state.select(Some(current + 1));
-                                    } else {
-                                        // Wrap around to the top
-                                        self.artist_list_state.select(Some(0));
-                                    }
-                                    // Clear album selection when navigating artists
-                                    self.album_list_state.select(None);
+                            if current < library.artists.len().saturating_sub(1) {
+                                self.artist_list_state.select(Some(current + 1));
+                            } else {
+                                // Wrap around to the top
+                                self.artist_list_state.select(Some(0));
+                            }
+                            // Clear album selection when navigating artists
+                            self.album_list_state.select(None);
+                            self.album_display_list_state.select(None);
                                 }
                             }
                         }
                         menu::PanelFocus::Albums => {
-                            // Navigate albums list
+                            // Navigate albums list using display list state
                             if let (Some(library), Some(selected_artist_index)) =
                                 (&self.library, self.artist_list_state.selected())
                             {
                                 if let Some(selected_artist) =
                                     library.artists.get(selected_artist_index)
                                 {
-                                    if !selected_artist.albums.is_empty() {
-                                        let current = self.album_list_state.selected().unwrap_or(0);
-                                        if current < selected_artist.albums.len().saturating_sub(1)
-                                        {
-                                            self.album_list_state.select(Some(current + 1));
+                                    // Compute display list to get total count
+                                    let (display_items, _album_indices) = 
+                                        ui::compute_album_display_list(selected_artist, &self.expanded_albums);
+                                    
+                                    if !display_items.is_empty() {
+                                        let current = self.album_display_list_state.selected().unwrap_or(0);
+                                        if current < display_items.len().saturating_sub(1) {
+                                            self.album_display_list_state.select(Some(current + 1));
                                         } else {
                                             // Wrap around to top
-                                            self.album_list_state.select(Some(0));
+                                            self.album_display_list_state.select(Some(0));
+                                        }
+                                        
+                                        // Update legacy album_list_state to point to current album if on album
+                                        if let Some(display_item) = display_items.get(current + 1) {
+                                            if let ui::DisplayItem::Album(_) = display_item {
+                                                // Find which album this corresponds to
+                                                let mut album_count = 0;
+                                                for (i, item) in display_items.iter().enumerate() {
+                                                    if matches!(item, ui::DisplayItem::Album(_)) {
+                                                        if i == current + 1 {
+                                                            self.album_list_state.select(Some(album_count));
+                                                            break;
+                                                        }
+                                                        album_count += 1;
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -578,21 +624,34 @@ impl App {
                     }
                 }
                 MPDAction::ToggleAlbumExpansion => {
-                    if let (Some(library), Some(selected_artist_index), Some(selected_album_index)) =
-                        (&self.library, self.artist_list_state.selected(), self.album_list_state.selected())
+                    if let (Some(library), Some(selected_artist_index)) =
+                        (&self.library, self.artist_list_state.selected())
                     {
                         if let Some(selected_artist) = library.artists.get(selected_artist_index) {
-                            if let Some(selected_album) = selected_artist.albums.get(selected_album_index) {
-                                // Check if album is expanded and if this might be a song selection
-                                let album_key = (selected_artist.name.clone(), selected_album.name.clone());
+                            // Get current display selection
+                            if let Some(display_index) = self.album_display_list_state.selected() {
+                                let (display_items, _album_indices) = 
+                                    ui::compute_album_display_list(selected_artist, &self.expanded_albums);
                                 
-                                if self.expanded_albums.contains(&album_key) {
-                                    // Album is expanded - we need to determine if this is a song selection
-                                    // For now, let's just close the album when 'l' is pressed on it again
-                                    self.expanded_albums.remove(&album_key);
-                                } else {
-                                    // Album is not expanded - expand it
-                                    self.expanded_albums.insert(album_key);
+                                if let Some(display_item) = display_items.get(display_index) {
+                                    match display_item {
+                                        ui::DisplayItem::Album(album_name) => {
+                                            // Toggle album expansion
+                                            let album_key = (selected_artist.name.clone(), album_name.clone());
+                                            
+                                            if self.expanded_albums.contains(&album_key) {
+                                                self.expanded_albums.remove(&album_key);
+                                            } else {
+                                                self.expanded_albums.insert(album_key);
+                                            }
+                                        }
+                                        ui::DisplayItem::Song(_title, _duration, file_path) => {
+                                            // Add specific song to queue
+                                            if let Err(e) = client.command(commands::Add::uri(file_path.to_str().unwrap())).await {
+                                                eprintln!("Error adding song to queue: {}", e);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -56,29 +56,31 @@ pub struct Protocol {
 #[derive(Debug, Clone)]
 pub enum DisplayItem {
     Album(String), // album name
-    Song(String, Option<std::time::Duration>), // song title and duration
+    Song(String, Option<std::time::Duration>, std::path::PathBuf), // song title, duration, and file path
 }
 
 /// Compute the display list for albums panel considering expanded albums
-fn compute_album_display_list(
+/// Returns (display_items, mapping_from_display_to_album_index)
+pub fn compute_album_display_list(
     artist: &crate::song::Artist,
     expanded_albums: &std::collections::HashSet<(String, String)>,
-) -> (Vec<DisplayItem>, Vec<usize>) {
+) -> (Vec<DisplayItem>, Vec<Option<usize>>) {
     let mut display_items = Vec::new();
-    let mut album_indices = Vec::new(); // Maps display indices to album indices
+    let mut album_indices = Vec::new(); // Maps display indices to album indices (None for songs)
     
     for (album_index, album) in artist.albums.iter().enumerate() {
         let album_key = (artist.name.clone(), album.name.clone());
         let is_expanded = expanded_albums.contains(&album_key);
         
         // Add album header
-        album_indices.push(album_index);
+        album_indices.push(Some(album_index));
         display_items.push(DisplayItem::Album(album.name.clone()));
         
         // If expanded, add songs
         if is_expanded {
             for song in &album.tracks {
-                display_items.push(DisplayItem::Song(song.title.clone(), song.duration));
+                album_indices.push(None); // Songs don't map to album indices
+                display_items.push(DisplayItem::Song(song.title.clone(), song.duration, song.file_path.clone()));
             }
         }
     }
@@ -98,6 +100,7 @@ pub fn render(
     library: &Option<Library>,
     artist_list_state: &mut ListState,
     album_list_state: &mut ListState,
+    album_display_list_state: &mut ListState,
     panel_focus: &PanelFocus,
     expanded_albums: &std::collections::HashSet<(String, String)>,
 ) {
@@ -339,7 +342,7 @@ pub fn render(
                                         .style(Style::default().fg(config.colors.album_color())),
                                 ])
                             }
-                            DisplayItem::Song(song_title, duration) => {
+                            DisplayItem::Song(song_title, duration, _file_path) => {
                                 let song_duration_str = match duration {
                                     Some(duration) => {
                                         let total_seconds = duration.as_secs();
@@ -386,7 +389,7 @@ pub fn render(
                     frame.render_stateful_widget(
                         albums_list_widget,
                         left_horizontal_chunks[1],
-                        album_list_state,
+                        album_display_list_state,
                     );
                 } else {
                     let tracks_box = create_empty_box("Albums", config);
