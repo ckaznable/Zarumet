@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
 use ratatui_image::{Resize, StatefulImage, protocol::StatefulProtocol};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -56,7 +56,7 @@ pub fn render(
     protocol: &mut Protocol,
     current_song: &Option<SongInfo>,
     queue: &[SongInfo],
-    selected_queue_index: Option<usize>,
+    queue_list_state: &mut ListState,
     config: &Config,
 ) {
     let area = frame.area();
@@ -107,12 +107,12 @@ pub fn render(
     // Render widgets in left vertical split
     let left_box_top = create_left_box_top(
         queue,
-        selected_queue_index,
+        queue_list_state,
         current_song,
         config,
         left_vertical_chunks[0],
     );
-    frame.render_widget(left_box_top, left_vertical_chunks[0]);
+    frame.render_stateful_widget(left_box_top, left_vertical_chunks[0], queue_list_state);
 
     // Render widgets in left vertical split
     let left_box_bottom = create_left_box_bottom(&play_state, progress, elapsed, duration, config);
@@ -288,11 +288,11 @@ fn create_left_box_bottom(
 
 fn create_left_box_top<'a>(
     queue: &[SongInfo],
-    selected_queue_index: Option<usize>,
+    queue_list_state: &ListState,
     current_song: &Option<SongInfo>,
     config: &Config,
     area: Rect,
-) -> Paragraph<'a> {
+) -> List<'a> {
     let border_color = config.colors.border_color();
     let border_title_color = config.colors.border_title_color();
     let text_color = config.colors.song_title_color();
@@ -303,15 +303,14 @@ fn create_left_box_top<'a>(
     // Calculate available width inside the box (minus borders and padding)
     let inner_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
 
-    let queue_lines = if queue.is_empty() {
+    let queue_items: Vec<ListItem> = if queue.is_empty() {
         vec![]
     } else {
         // First, determine the maximum number width needed for proper alignment
-        let visible_count = (area.height.saturating_sub(3) as usize).max(1);
         let max_num_width = queue
             .iter()
-            .take(visible_count)
             .enumerate()
+            .take(1000) // Reasonable limit for calculation
             .map(|(i, _)| {
                 let num_str = format!("{}. ", i + 1);
                 unicode_width::UnicodeWidthStr::width(&num_str as &str)
@@ -321,7 +320,6 @@ fn create_left_box_top<'a>(
 
         queue
             .iter()
-            .take(visible_count) // Use full height minus borders/title
             .enumerate()
             .map(|(i, song)| {
                 // Calculate available width for entire line using consistent max_num_width
@@ -356,11 +354,8 @@ fn create_left_box_top<'a>(
                     .map(|current| current.file_path == song.file_path)
                     .unwrap_or(false);
 
-                // Calculate actual index in the full queue
-                let actual_index = i;
-
                 // Check if this is the selected song
-                let is_selected = selected_queue_index == Some(actual_index);
+                let is_selected = queue_list_state.selected() == Some(i);
 
                 // Create base style
                 let mut queue_album_color = Style::default().fg(queue_album_color);
@@ -403,8 +398,7 @@ fn create_left_box_top<'a>(
                 }
 
                 // Create spans with appropriate styling
-                let actual_index = i;
-                let num_str = format!("{}. ", actual_index + 1);
+                let num_str = format!("{}. ", i + 1);
                 let padded_num_str = format!("{:<width$}", num_str, width = max_num_width);
                 let mut spans = vec![Span::styled(padded_num_str, pos_color)];
 
@@ -437,12 +431,12 @@ fn create_left_box_top<'a>(
                     }
                 }
 
-                Line::from(spans)
+                ListItem::new(Line::from(spans))
             })
             .collect::<Vec<_>>()
     };
 
-    Paragraph::new(queue_lines)
+    List::new(queue_items)
         .block(
             Block::default()
                 .border_type(BorderType::Rounded)
@@ -454,7 +448,8 @@ fn create_left_box_top<'a>(
                 .border_style(Style::default().fg(border_color)),
         )
         .style(Style::default().fg(text_color))
-        .left_aligned()
+        .highlight_style(Style::default())
+        .repeat_highlight_symbol(true)
 }
 
 /// Create the middle box widget that spans both splits

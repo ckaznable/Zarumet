@@ -12,7 +12,10 @@ use crossterm::{
 };
 use futures::executor::block_on;
 use mpd_client::{Client, commands};
-use ratatui::DefaultTerminal;
+use ratatui::{
+    DefaultTerminal,
+    widgets::ListState,
+};
 use ratatui_image::picker::Picker;
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -57,6 +60,8 @@ pub struct App {
     queue: Vec<SongInfo>,
     /// Currently selected queue item index
     selected_queue_index: Option<usize>,
+    /// List state for the queue widget
+    queue_list_state: ListState,
     /// Configuration loaded from TOML file
     config: Config,
 }
@@ -70,11 +75,15 @@ impl App {
             config.mpd.address = address;
         }
 
+        let mut queue_list_state = ListState::default();
+        queue_list_state.select(Some(0)); // Select top song by default
+        
         Ok(Self {
             running: false,
             current_song: None,
             queue: Vec::new(),
             selected_queue_index: Some(0), // Select top song by default
+            queue_list_state,
             config,
         })
     }
@@ -131,7 +140,7 @@ impl App {
                     &mut protocol,
                     &self.current_song,
                     &self.queue,
-                    self.selected_queue_index,
+                    &mut self.queue_list_state,
                     &self.config,
                 )
             })?;
@@ -219,15 +228,16 @@ impl App {
             .collect();
 
         // Update selected index to stay within bounds
-        if let Some(selected) = self.selected_queue_index {
+        if let Some(selected) = self.queue_list_state.selected() {
             if selected >= self.queue.len() {
-                self.selected_queue_index = if self.queue.is_empty() {
-                    None
+                if self.queue.is_empty() {
+                    self.queue_list_state.select(None);
                 } else {
-                    Some(self.queue.len().saturating_sub(1))
-                };
+                    self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
+                }
             }
         }
+        self.selected_queue_index = self.queue_list_state.selected();
 
         // Process status result
         let progress = match (status.elapsed, status.duration) {
@@ -270,41 +280,30 @@ impl App {
             match action {
                 MPDAction::QueueUp => {
                     if !self.queue.is_empty() {
-                        match self.selected_queue_index {
-                            Some(selected) => {
-                                if selected > 0 {
-                                    self.selected_queue_index = Some(selected - 1);
-                                } else {
-                                    // Wrap around to the bottom
-                                    self.selected_queue_index =
-                                        Some(self.queue.len().saturating_sub(1));
-                                }
-                            }
-                            None => {
-                                self.selected_queue_index = Some(0);
-                            }
+                        let current = self.queue_list_state.selected().unwrap_or(0);
+                        if current > 0 {
+                            self.queue_list_state.select(Some(current - 1));
+                        } else {
+                            // Wrap around to the bottom
+                            self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
                         }
+                        self.selected_queue_index = self.queue_list_state.selected();
                     }
                 }
                 MPDAction::QueueDown => {
                     if !self.queue.is_empty() {
-                        match self.selected_queue_index {
-                            Some(selected) => {
-                                if selected < self.queue.len().saturating_sub(1) {
-                                    self.selected_queue_index = Some(selected + 1);
-                                } else {
-                                    // Wrap around to the top
-                                    self.selected_queue_index = Some(0);
-                                }
-                            }
-                            None => {
-                                self.selected_queue_index = Some(0);
-                            }
+                        let current = self.queue_list_state.selected().unwrap_or(0);
+                        if current < self.queue.len().saturating_sub(1) {
+                            self.queue_list_state.select(Some(current + 1));
+                        } else {
+                            // Wrap around to the top
+                            self.queue_list_state.select(Some(0));
                         }
+                        self.selected_queue_index = self.queue_list_state.selected();
                     }
                 }
                 MPDAction::PlaySelected => {
-                    if let Some(selected) = self.selected_queue_index {
+                    if let Some(selected) = self.queue_list_state.selected() {
                         if selected < self.queue.len() {
                             // Play the song at the selected position in the queue
                             let song_position: mpd_client::commands::SongPosition = selected.into();
@@ -318,7 +317,7 @@ impl App {
                     }
                 }
                 MPDAction::MoveUpInQueue => {
-                    if let Some(selected) = self.selected_queue_index {
+                    if let Some(selected) = self.queue_list_state.selected() {
                         if selected > 0 && selected < self.queue.len() {
                             // Move song up in queue (from position `selected` to `selected - 1`)
                             let from_pos: mpd_client::commands::SongPosition = selected.into();
@@ -333,13 +332,14 @@ impl App {
                                 eprintln!("Error moving song up in queue: {}", e);
                             } else {
                                 // Update selected index to follow the moved song
-                                self.selected_queue_index = Some(selected - 1);
+                                self.queue_list_state.select(Some(selected - 1));
+                                self.selected_queue_index = self.queue_list_state.selected();
                             }
                         }
                     }
                 }
                 MPDAction::MoveDownInQueue => {
-                    if let Some(selected) = self.selected_queue_index {
+                    if let Some(selected) = self.queue_list_state.selected() {
                         if selected < self.queue.len().saturating_sub(1) {
                             // Move song down in queue (from position `selected` to `selected + 1`)
                             let from_pos: mpd_client::commands::SongPosition = selected.into();
@@ -354,14 +354,15 @@ impl App {
                                 eprintln!("Error moving song down in queue: {}", e);
                             } else {
                                 // Update selected index to follow the moved song
-                                self.selected_queue_index = Some(selected + 1);
+                                self.queue_list_state.select(Some(selected + 1));
+                                self.selected_queue_index = self.queue_list_state.selected();
                             }
                         }
                     }
                 }
 
                 MPDAction::RemoveFromQueue => {
-                    if let Some(selected) = self.selected_queue_index {
+                    if let Some(selected) = self.queue_list_state.selected() {
                         if selected < self.queue.len() {
                             // Remove the selected song from queue
                             let song_position: mpd_client::commands::SongPosition = selected.into();
@@ -373,11 +374,11 @@ impl App {
                             } else {
                                 // Update selected index to stay within bounds
                                 if self.queue.is_empty() {
-                                    self.selected_queue_index = None;
+                                    self.queue_list_state.select(None);
                                 } else if selected >= self.queue.len().saturating_sub(1) {
-                                    self.selected_queue_index =
-                                        Some(self.queue.len().saturating_sub(1));
+                                    self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
                                 }
+                                self.selected_queue_index = self.queue_list_state.selected();
                             }
                         }
                     }
