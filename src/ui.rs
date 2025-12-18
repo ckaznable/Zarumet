@@ -10,6 +10,7 @@ use ratatui_image::{Resize, StatefulImage, protocol::StatefulProtocol};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::Config;
+use crate::menu::MenuMode;
 use crate::song::SongInfo;
 
 /// Truncate a string to fit within the given display width, handling Unicode properly
@@ -58,30 +59,9 @@ pub fn render(
     queue: &[SongInfo],
     queue_list_state: &mut ListState,
     config: &Config,
+    menu_mode: &MenuMode,
 ) {
     let area = frame.area();
-
-    // Split the area horizontally: left box, right content
-    // Split area vertically: top section, middle section, bottom section
-    let main_vertical_chunks = Layout::vertical([
-        Constraint::Length(1),       // Format info takes 1 line
-        Constraint::Length(3),       // New middle box takes 3 lines
-        Constraint::Percentage(100), // Remaining content takes rest
-    ])
-    .split(area);
-
-    // Split bottom section horizontally: left box, right content
-    let bottom_horizontal_chunks = Layout::horizontal([
-        Constraint::Percentage(50), // Left box takes 55% of width
-        Constraint::Percentage(50), // Right content takes 45% of width
-    ])
-    .split(main_vertical_chunks[2]);
-
-    let left_vertical_chunks = Layout::vertical([
-        Constraint::Percentage(100), // Queue takes most of the space
-        Constraint::Length(3),       // Progress bar takes 3 lines
-    ])
-    .split(bottom_horizontal_chunks[0]);
 
     // Extract play_state, progress, and format from current_song
     let (play_state, progress, elapsed, duration, format) = if let Some(song) = current_song {
@@ -96,63 +76,176 @@ pub fn render(
         (None, None, None, None, None)
     };
 
-    // Render format info widget at top
-    let format_widget = create_format_widget(&format, current_song, config);
-    frame.render_widget(format_widget, main_vertical_chunks[0]);
+    match menu_mode {
+        MenuMode::Queue => {
+            // Original layout - restore exactly as it was before changes
+            // Split the area horizontally: left box, right content
+            // Split area vertically: top section, middle section, bottom section
+            let main_vertical_chunks = Layout::vertical([
+                Constraint::Length(1),       // Format info takes 1 line
+                Constraint::Length(3),       // New middle box takes 3 lines
+                Constraint::Percentage(100), // Remaining content takes rest
+            ])
+            .split(area);
 
-    // Render middle box that spans both splits
-    let middle_box = create_middle_box(config);
-    frame.render_widget(middle_box, main_vertical_chunks[1]);
+            // Split bottom section horizontally: left box, right content
+            let bottom_horizontal_chunks = Layout::horizontal([
+                Constraint::Percentage(50), // Left box takes 55% of width
+                Constraint::Percentage(50), // Right content takes 45% of width
+            ])
+            .split(main_vertical_chunks[2]);
 
-    // Render widgets in left vertical split
-    let left_box_top = create_left_box_top(
-        queue,
-        queue_list_state,
-        current_song,
-        config,
-        left_vertical_chunks[0],
-    );
-    frame.render_stateful_widget(left_box_top, left_vertical_chunks[0], queue_list_state);
+            let left_vertical_chunks = Layout::vertical([
+                Constraint::Percentage(100), // Queue takes most of the space
+                Constraint::Length(3),       // Progress bar takes 3 lines
+            ])
+            .split(bottom_horizontal_chunks[0]);
 
-    // Render widgets in left vertical split
-    let left_box_bottom = create_left_box_bottom(&play_state, progress, elapsed, duration, config);
-    frame.render_widget(left_box_bottom, left_vertical_chunks[1]);
+            // Render format info widget at top
+            let format_widget = create_format_widget(&format, current_song, config);
+            frame.render_widget(format_widget, main_vertical_chunks[0]);
 
-    // Split the right area vertically: image on top, song info at bottom
-    let right_vertical_chunks = Layout::vertical([
-        Constraint::Percentage(100), // Image takes most space
-        Constraint::Length(4),       // Song info takes 4 lines
-    ])
-    .split(bottom_horizontal_chunks[1]);
+            // Render middle box that spans both splits
+            let middle_box = create_middle_box(config);
+            frame.render_widget(middle_box, main_vertical_chunks[1]);
 
-    let image_area = right_vertical_chunks[0];
+            // Render widgets in left vertical split
+            let left_box_top = create_left_box_top(
+                queue,
+                queue_list_state,
+                current_song,
+                config,
+                left_vertical_chunks[0],
+            );
+            frame.render_stateful_widget(left_box_top, left_vertical_chunks[0], queue_list_state);
 
-    // Use full image area for better space utilization
+            // Render widgets in left vertical split
+            let left_box_bottom =
+                create_left_box_bottom(&play_state, progress, elapsed, duration, config);
+            frame.render_widget(left_box_bottom, left_vertical_chunks[1]);
 
-    // Only render image if we have one
-    if let Some(ref mut img) = protocol.image {
-        // Get the image dimensions after resizing for the available area
-        let resize = Resize::Scale(Some(FilterType::Lanczos3));
-        let img_rect = img.size_for(resize.clone(), image_area);
+            // Split the right area vertically: image on top, song info at bottom
+            let right_vertical_chunks = Layout::vertical([
+                Constraint::Percentage(100), // Image takes most space
+                Constraint::Length(4),       // Song info takes 4 lines
+            ])
+            .split(bottom_horizontal_chunks[1]);
 
-        // Center the image within the available area
-        let centered_area = center_image(img_rect, image_area);
+            let image_area = right_vertical_chunks[0];
 
-        let image = StatefulImage::default().resize(resize);
-        frame.render_stateful_widget(image, centered_area, img);
-    } else {
-        let placeholder_area = center_area(
-            right_vertical_chunks[0],
-            Constraint::Length(12),
-            Constraint::Length(1),
-        );
-        let placeholder = Paragraph::new("No album art").style(Style::default().dark_gray());
-        frame.render_widget(placeholder, placeholder_area);
+            // Only render image if we have one
+            if let Some(ref mut img) = protocol.image {
+                // Get the image dimensions after resizing for the available area
+                let resize = Resize::Scale(Some(FilterType::Lanczos3));
+                let img_rect = img.size_for(resize.clone(), image_area);
+
+                // Center the image within the available area
+                let centered_area = center_image(img_rect, image_area);
+
+                let image = StatefulImage::default().resize(resize);
+                frame.render_stateful_widget(image, centered_area, img);
+            } else {
+                let placeholder_area = center_area(
+                    right_vertical_chunks[0],
+                    Constraint::Length(12),
+                    Constraint::Length(1),
+                );
+                let placeholder =
+                    Paragraph::new("No album art").style(Style::default().dark_gray());
+                frame.render_widget(placeholder, placeholder_area);
+            }
+
+            // Render the song information
+            let song_widget = create_song_widget(current_song, config);
+            frame.render_widget(song_widget, right_vertical_chunks[1]);
+        }
+        MenuMode::TwoVerticalBlocks => {
+            // Same as original layout, but replace queue box with 2 side-by-side boxes
+            // Split area vertically: top section, middle section, bottom section
+            let main_vertical_chunks = Layout::vertical([
+                Constraint::Length(1),       // Format info takes 1 line
+                Constraint::Length(3),       // New middle box takes 3 lines
+                Constraint::Percentage(100), // Remaining content takes rest
+            ])
+            .split(area);
+
+            // Split bottom section horizontally: left boxes, right content
+            let bottom_horizontal_chunks = Layout::horizontal([
+                Constraint::Percentage(50), // Left boxes take 50% of width
+                Constraint::Percentage(50), // Right content takes 50% of width
+            ])
+            .split(main_vertical_chunks[2]);
+
+            // Split left side into two side-by-side boxes and progress bar
+            let left_vertical_chunks = Layout::vertical([
+                Constraint::Percentage(100), // Two boxes take most of the space
+                Constraint::Length(3),       // Progress bar takes 3 lines
+            ])
+            .split(bottom_horizontal_chunks[0]);
+
+            // Split the top part into two side-by-side boxes
+            let left_horizontal_chunks = Layout::horizontal([
+                Constraint::Percentage(35), // Artists box takes 35% of left space
+                Constraint::Percentage(65), // Tracks box takes 65% of left space
+            ])
+            .split(left_vertical_chunks[0]);
+
+            // Render format info widget at top
+            let format_widget = create_format_widget(&format, current_song, config);
+            frame.render_widget(format_widget, main_vertical_chunks[0]);
+
+            // Render middle box that spans both splits
+            let middle_box = create_middle_box(config);
+            frame.render_widget(middle_box, main_vertical_chunks[1]);
+
+            // Render two empty boxes side by side on the left
+            let artists_box = create_empty_box("Artists", config);
+            frame.render_widget(artists_box, left_horizontal_chunks[0]);
+
+            let tracks_box = create_empty_box("Tracks", config);
+            frame.render_widget(tracks_box, left_horizontal_chunks[1]);
+
+            // Render progress bar under the two empty boxes
+            let progress_widget =
+                create_left_box_bottom(&play_state, progress, elapsed, duration, config);
+            frame.render_widget(progress_widget, left_vertical_chunks[1]);
+
+            // Split the right area vertically: image on top, song info at bottom
+            let right_vertical_chunks = Layout::vertical([
+                Constraint::Percentage(100), // Image takes most space
+                Constraint::Length(4),       // Song info takes 4 lines
+            ])
+            .split(bottom_horizontal_chunks[1]);
+
+            let image_area = right_vertical_chunks[0];
+
+            // Only render image if we have one (exactly as original)
+            if let Some(ref mut img) = protocol.image {
+                // Get the image dimensions after resizing for the available area
+                let resize = Resize::Scale(Some(FilterType::Lanczos3));
+                let img_rect = img.size_for(resize.clone(), image_area);
+
+                // Center the image within the available area
+                let centered_area = center_image(img_rect, image_area);
+
+                let image = StatefulImage::default().resize(resize);
+                frame.render_stateful_widget(image, centered_area, img);
+            } else {
+                let placeholder_area = center_area(
+                    right_vertical_chunks[0],
+                    Constraint::Length(12),
+                    Constraint::Length(1),
+                );
+                let placeholder =
+                    Paragraph::new("No album art").style(Style::default().dark_gray());
+                frame.render_widget(placeholder, placeholder_area);
+            }
+
+            // Render the song information
+            let song_widget = create_song_widget(current_song, config);
+            frame.render_widget(song_widget, right_vertical_chunks[1]);
+        }
     }
-
-    // Render the song information
-    let song_widget = create_song_widget(current_song, config);
-    frame.render_widget(song_widget, right_vertical_chunks[1]);
 }
 
 /// Format duration as MM:SS
@@ -464,6 +557,27 @@ fn create_middle_box<'a>(config: &Config) -> Paragraph<'a> {
             Block::default()
                 .border_type(BorderType::Rounded)
                 .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color)),
+        )
+        .style(Style::default().fg(text_color))
+        .centered()
+}
+
+/// Create an empty box widget
+fn create_empty_box<'a>(title: &'a str, config: &Config) -> Paragraph<'a> {
+    let border_color = config.colors.border_color();
+    let border_title_color = config.colors.border_title_color();
+    let text_color = config.colors.song_title_color();
+
+    Paragraph::new("")
+        .block(
+            Block::default()
+                .border_type(BorderType::Rounded)
+                .borders(Borders::ALL)
+                .title(Span::styled(
+                    format!(" {} ", title),
+                    Style::default().fg(border_title_color),
+                ))
                 .border_style(Style::default().fg(border_color)),
         )
         .style(Style::default().fg(text_color))

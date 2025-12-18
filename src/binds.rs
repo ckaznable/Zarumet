@@ -54,6 +54,10 @@ impl KeyBinds {
             (KeyModifiers::NONE, KeyCode::Char('l')) => Some(MPDAction::PlaySelected),
             (KeyModifiers::NONE, KeyCode::Right) => Some(MPDAction::PlaySelected),
 
+            // Menu mode controls
+            (KeyModifiers::NONE, KeyCode::Char('1')) => Some(MPDAction::SwitchToQueueMenu),
+            (KeyModifiers::NONE, KeyCode::Char('2')) => Some(MPDAction::SwitchToTwoVerticalBlocks),
+
             // Application controls
             (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Char('q')) => {
                 Some(MPDAction::Quit)
@@ -103,6 +107,10 @@ pub enum MPDAction {
     // Application
     Quit,
     Refresh,
+
+    // Menu mode
+    SwitchToQueueMenu,
+    SwitchToTwoVerticalBlocks,
 }
 
 impl MPDAction {
@@ -193,7 +201,9 @@ impl MPDAction {
             | MPDAction::Quit
             | MPDAction::Refresh
             | MPDAction::MoveUpInQueue
-            | MPDAction::MoveDownInQueue => {
+            | MPDAction::MoveDownInQueue
+            | MPDAction::SwitchToQueueMenu
+            | MPDAction::SwitchToTwoVerticalBlocks => {
                 // These are handled by the main application
             }
         }

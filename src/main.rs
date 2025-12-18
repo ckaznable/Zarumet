@@ -1,6 +1,7 @@
 mod binds;
 mod cli;
 mod config;
+mod menu;
 mod song;
 mod ui;
 
@@ -12,10 +13,7 @@ use crossterm::{
 };
 use futures::executor::block_on;
 use mpd_client::{Client, commands};
-use ratatui::{
-    DefaultTerminal,
-    widgets::ListState,
-};
+use ratatui::{DefaultTerminal, widgets::ListState};
 use ratatui_image::picker::Picker;
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -25,6 +23,7 @@ use tokio::net::TcpStream;
 use binds::{KeyBinds, MPDAction};
 use cli::Args;
 use config::Config;
+use menu::MenuMode;
 use song::SongInfo;
 use ui::Protocol;
 
@@ -64,6 +63,8 @@ pub struct App {
     queue_list_state: ListState,
     /// Configuration loaded from TOML file
     config: Config,
+    /// Current menu mode
+    menu_mode: MenuMode,
 }
 
 impl App {
@@ -77,7 +78,7 @@ impl App {
 
         let queue_list_state = ListState::default();
         // Don't select anything initially - will be set when queue is populated
-        
+
         Ok(Self {
             running: false,
             current_song: None,
@@ -85,6 +86,7 @@ impl App {
             selected_queue_index: None, // Will be set when queue is populated
             queue_list_state,
             config,
+            menu_mode: MenuMode::Queue, // Start with queue menu
         })
     }
 
@@ -142,6 +144,7 @@ impl App {
                     &self.queue,
                     &mut self.queue_list_state,
                     &self.config,
+                    &self.menu_mode,
                 )
             })?;
 
@@ -235,7 +238,8 @@ impl App {
                     if self.queue.is_empty() {
                         self.queue_list_state.select(None);
                     } else {
-                        self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
+                        self.queue_list_state
+                            .select(Some(self.queue.len().saturating_sub(1)));
                     }
                 }
             }
@@ -294,7 +298,8 @@ impl App {
                             self.queue_list_state.select(Some(current - 1));
                         } else {
                             // Wrap around to the bottom
-                            self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
+                            self.queue_list_state
+                                .select(Some(self.queue.len().saturating_sub(1)));
                         }
                         self.selected_queue_index = self.queue_list_state.selected();
                     }
@@ -385,7 +390,8 @@ impl App {
                                 if self.queue.is_empty() {
                                     self.queue_list_state.select(None);
                                 } else if selected >= self.queue.len().saturating_sub(1) {
-                                    self.queue_list_state.select(Some(self.queue.len().saturating_sub(1)));
+                                    self.queue_list_state
+                                        .select(Some(self.queue.len().saturating_sub(1)));
                                 }
                                 self.selected_queue_index = self.queue_list_state.selected();
                             }
@@ -396,6 +402,12 @@ impl App {
                 MPDAction::Refresh => {
                     // Force refresh by updating current song and queue
                     // This will be handled in the next update cycle
+                }
+                MPDAction::SwitchToQueueMenu => {
+                    self.menu_mode = MenuMode::Queue;
+                }
+                MPDAction::SwitchToTwoVerticalBlocks => {
+                    self.menu_mode = MenuMode::TwoVerticalBlocks;
                 }
                 _ => {
                     // Execute MPD command for other actions
