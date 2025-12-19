@@ -402,6 +402,11 @@ impl BindsConfig {
     pub fn parse_keybinding(&self, key_str: &str) -> Option<(crossterm::event::KeyModifiers, crossterm::event::KeyCode)> {
         let key_str = key_str.to_lowercase();
         
+        // Special case for standalone "-" character
+        if key_str == "-" {
+            return Some((crossterm::event::KeyModifiers::NONE, crossterm::event::KeyCode::Char('-')));
+        }
+        
         let parts: Vec<&str> = key_str.split('-').collect();
         if parts.is_empty() {
             return None;
