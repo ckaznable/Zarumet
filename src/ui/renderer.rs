@@ -310,11 +310,11 @@ fn render_tracks_mode(
                             let available_width =
                                 left_horizontal_chunks[1].width.saturating_sub(4) as usize; // 4 for borders/padding
                             let filler_width = available_width
-                                .saturating_sub(album_name_width + duration_width + 5); // 3 for "  " between name and duration
+                                .saturating_sub(album_name_width + duration_width + 6); // 5 for " " between name and duration and 1 for " " at start
 
                             let filler = "─".repeat(filler_width.max(0));
                             let display_text =
-                                format!("{}{}     {}", album_name, filler, duration_str);
+                                format!(" {}{}     {}", album_name, filler, duration_str);
 
                             ratatui::widgets::ListItem::new(vec![
                                 Line::from(display_text)
@@ -337,11 +337,11 @@ fn render_tracks_mode(
                             let available_width =
                                 left_horizontal_chunks[1].width.saturating_sub(4) as usize;
                             let filler_width = available_width
-                                .saturating_sub(song_title_width + song_duration_width + 2);
+                                .saturating_sub(song_title_width + song_duration_width + 3);
                             let filler = " ".repeat(filler_width.max(0));
 
                             let song_text =
-                                format!("  {}{}{}", song_title, filler, song_duration_str);
+                                format!("   {}{}{}", song_title, filler, song_duration_str);
                             ratatui::widgets::ListItem::new(vec![Line::from(song_text).style(
                                 Style::default().fg(config.colors.queue_song_title_color()),
                             )])
