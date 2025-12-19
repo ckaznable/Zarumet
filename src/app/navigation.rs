@@ -394,11 +394,17 @@ impl App {
                             }
                             DisplayItem::Song(_title, _duration, file_path) => {
                                 // Add specific song to queue
+                                let queue_was_empty = self.queue.is_empty();
                                 if let Err(e) = client
                                     .command(commands::Add::uri(file_path.to_str().unwrap()))
                                     .await
                                 {
                                     eprintln!("Error adding song to queue: {}", e);
+                                } else if queue_was_empty {
+                                    // Start playback if queue was empty
+                                    if let Err(e) = client.command(commands::Play::current()).await {
+                                        eprintln!("Error starting playback: {}", e);
+                                    }
                                 }
                             }
                         }
@@ -419,12 +425,19 @@ impl App {
                 if let Some(selected_album_index) = self.album_list_state.selected() {
                     if let Some(selected_album) = selected_artist.albums.get(selected_album_index) {
                         // Add all songs from the album to queue
+                        let queue_was_empty = self.queue.is_empty();
                         for song in &selected_album.tracks {
                             if let Err(e) = client
                                 .command(commands::Add::uri(song.file_path.to_str().unwrap()))
                                 .await
                             {
                                 eprintln!("Error adding song to queue: {}", e);
+                            }
+                        }
+                        // Start playback if queue was empty
+                        if queue_was_empty {
+                            if let Err(e) = client.command(commands::Play::current()).await {
+                                eprintln!("Error starting playback: {}", e);
                             }
                         }
                     }
