@@ -57,6 +57,10 @@ pub struct ColorsConfig {
     pub queue_position: String,
     #[serde(default = "ColorsConfig::default_queue_duration")]
     pub queue_duration: String,
+    #[serde(default = "ColorsConfig::default_top_accent")]
+    pub top_accent: String,
+    #[serde(default = "ColorsConfig::default_search_duration")]
+    pub search_duration: String,
 }
 
 impl Config {
@@ -231,6 +235,18 @@ impl ColorsConfig {
             .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
             .unwrap_or(ratatui::style::Color::Magenta)
     }
+
+    pub fn top_accent_color(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.top_accent)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::Blue)
+    }
+
+    pub fn search_duration_color(&self) -> ratatui::style::Color {
+        Self::parse_hex(&self.search_duration)
+            .map(|(r, g, b)| ratatui::style::Color::Rgb(r, g, b))
+            .unwrap_or(ratatui::style::Color::Yellow)
+    }
 }
 
 impl Default for Config {
@@ -286,27 +302,27 @@ impl ColorsConfig {
     }
 
     fn default_paused() -> String {
-        "#fae280".to_string()
+        "#e16a7c".to_string()
     }
 
     fn default_playing() -> String {
-        "#fae280".to_string()
+        "#e16a7c".to_string()
     }
 
     fn default_stopped() -> String {
-        "#fae280".to_string()
+        "#e16a7c".to_string()
     }
 
     fn default_time_separator() -> String {
-        "#c6bb69".to_string()
+        "#e16a7c".to_string()
     }
 
     fn default_time_duration() -> String {
-        "#c6bb69".to_string()
+        "#e16a7c".to_string()
     }
 
     fn default_time_elapsed() -> String {
-        "#c6bb69".to_string()
+        "#e16a7c".to_string()
     }
 
     fn default_queue_selected_highlight() -> String {
@@ -336,6 +352,14 @@ impl ColorsConfig {
     fn default_queue_duration() -> String {
         "#e16a7c".to_string()
     }
+
+    fn default_search_duration() -> String {
+        "#e16a7c".to_string()
+    }
+
+    fn default_top_accent() -> String {
+        "#26a0a1".to_string()
+    }
 }
 
 impl Default for ColorsConfig {
@@ -361,6 +385,8 @@ impl Default for ColorsConfig {
             queue_song_title: Self::default_queue_song_title(),
             queue_position: Self::default_queue_position(),
             queue_duration: Self::default_queue_duration(),
+            top_accent: Self::default_top_accent(),
+            search_duration: Self::default_search_duration(),
         }
     }
 }

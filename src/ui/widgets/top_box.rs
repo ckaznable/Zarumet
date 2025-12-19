@@ -14,7 +14,10 @@ pub fn create_top_box<'a>(
 ) -> Paragraph<'a> {
     let border_color = config.colors.border_color();
     let text_color = config.colors.song_title_color();
-    let accent_color = config.colors.progress_filled_color();
+    let playing = config.colors.playing();
+    let paused = config.colors.paused();
+    let stopped = config.colors.stopped();
+    let accent_color = config.colors.top_accent_color();
 
     let mut spans = Vec::new();
 
@@ -53,25 +56,36 @@ pub fn create_top_box<'a>(
 
         // Playback state and song count
         spans.push(Span::raw("  │  "));
-        
+
         // Queue info
         let queue_count = status.playlist_length;
         let playback_state = match status.state {
-            mpd_client::responses::PlayState::Playing => "",
-            mpd_client::responses::PlayState::Paused => "",
-            mpd_client::responses::PlayState::Stopped => "",
+            mpd_client::responses::PlayState::Playing => "⏸",
+            mpd_client::responses::PlayState::Paused => "▶",
+            mpd_client::responses::PlayState::Stopped => "⏹",
         };
-        
-        spans.push(Span::styled(playback_state, Style::default().fg(accent_color)));
-        spans.push(Span::styled(format!(" {} songs", queue_count), Style::default().fg(text_color)));
+        let state_color = match status.state {
+            mpd_client::responses::PlayState::Playing => playing,
+            mpd_client::responses::PlayState::Paused => paused,
+            mpd_client::responses::PlayState::Stopped => stopped,
+        };
+
+        spans.push(Span::styled(
+            playback_state,
+            Style::default().fg(state_color),
+        ));
+        spans.push(Span::styled(
+            format!(" {} songs", queue_count),
+            Style::default().fg(text_color),
+        ));
 
         // Volume widget
         spans.push(Span::raw("  │  "));
-        
+
         // Visual volume display with Nerd Font icons
         let volume_bars = status.volume / 10;
         let empty_bars = 10 - volume_bars;
-        
+
         // Volume icon based on level
         let volume_icon = if status.volume == 0 {
             "󰝟"
@@ -82,13 +96,22 @@ pub fn create_top_box<'a>(
         } else {
             "󰕾"
         };
-        
+
         spans.push(Span::styled(volume_icon, Style::default().fg(text_color)));
         spans.push(Span::styled(" ", Style::default().fg(text_color)));
-        spans.push(Span::styled("█".repeat(volume_bars as usize), Style::default().fg(accent_color)));
-        spans.push(Span::styled("░".repeat(empty_bars as usize), Style::default().fg(text_color)));
-        spans.push(Span::styled(format!(" {}%", status.volume), Style::default().fg(text_color)));
-        
+        spans.push(Span::styled(
+            "█".repeat(volume_bars as usize),
+            Style::default().fg(accent_color),
+        ));
+        spans.push(Span::styled(
+            "░".repeat(empty_bars as usize),
+            Style::default().fg(text_color),
+        ));
+        spans.push(Span::styled(
+            format!(" {}%", status.volume),
+            Style::default().fg(text_color),
+        ));
+
         // Menu mode indicator
         spans.push(Span::raw("  │  "));
         let mode_text = match menu_mode {
@@ -97,7 +120,10 @@ pub fn create_top_box<'a>(
         };
         spans.push(Span::styled(mode_text.0, Style::default().fg(mode_text.1)));
     } else {
-        spans.push(Span::styled("󰅙 No MPD connection", Style::default().fg(text_color)));
+        spans.push(Span::styled(
+            "󰅙 No MPD connection",
+            Style::default().fg(text_color),
+        ));
     }
 
     let content = Line::from(spans);
