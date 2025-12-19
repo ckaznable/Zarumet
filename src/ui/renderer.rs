@@ -324,16 +324,22 @@ fn render_tracks_mode(
                             let available_width =
                                 left_horizontal_chunks[1].width.saturating_sub(4) as usize; // 4 for borders/padding
                             let duration_width = duration_str.width();
-                            let max_album_name_width = available_width.saturating_sub(duration_width + 6); // 6 for " " before/after and "     " between name and duration
+                            let max_album_name_width =
+                                available_width.saturating_sub(duration_width + 6); // 6 for " " before/after and "     " between name and duration
 
                             // Truncate album name if needed to keep duration aligned
-                            let truncated_album_name = if album_name.width() > max_album_name_width {
-                                crate::ui::utils::truncate_by_width(album_name, max_album_name_width)
+                            let truncated_album_name = if album_name.width() > max_album_name_width
+                            {
+                                crate::ui::utils::truncate_by_width(
+                                    album_name,
+                                    max_album_name_width,
+                                )
                             } else {
                                 album_name.clone()
                             };
 
-                            let filler_width = max_album_name_width.saturating_sub(truncated_album_name.width());
+                            let filler_width =
+                                max_album_name_width.saturating_sub(truncated_album_name.width());
                             let filler = "─".repeat(filler_width.max(0));
                             let display_text =
                                 format!(" {}{}     {}", truncated_album_name, filler, duration_str);
@@ -357,16 +363,22 @@ fn render_tracks_mode(
                             let available_width =
                                 left_horizontal_chunks[1].width.saturating_sub(4) as usize;
                             let song_duration_width = song_duration_str.width();
-                            let max_song_title_width = available_width.saturating_sub(song_duration_width + 6); // 6 for "   " prefix and spaces
+                            let max_song_title_width =
+                                available_width.saturating_sub(song_duration_width + 3); // 3 for "   " prefix
 
                             // Truncate song title if needed to keep duration aligned
-                            let truncated_song_title = if song_title.width() > max_song_title_width {
-                                crate::ui::utils::truncate_by_width(song_title, max_song_title_width)
+                            let truncated_song_title = if song_title.width() > max_song_title_width
+                            {
+                                crate::ui::utils::truncate_by_width(
+                                    song_title,
+                                    max_song_title_width,
+                                )
                             } else {
                                 song_title.clone()
                             };
 
-                            let filler_width = max_song_title_width.saturating_sub(truncated_song_title.width());
+                            let filler_width =
+                                max_song_title_width.saturating_sub(truncated_song_title.width());
                             let filler = " ".repeat(filler_width.max(0));
 
                             let song_text = format!("   {}{}", truncated_song_title, filler,);
