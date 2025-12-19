@@ -32,6 +32,12 @@ impl EventHandlers for App {
         if let Some(action) = self.key_binds.handle_key(key, &self.menu_mode, &self.panel_focus) {
             match action {
                 MPDAction::Quit => self.quit(),
+                MPDAction::Next | MPDAction::Previous => {
+                    // Only allow Next/Previous if queue is not empty
+                    if !self.queue.is_empty() {
+                        self.handle_navigation_action(action, client).await?;
+                    }
+                }
                 _ => {
                     // Handle other actions through navigation trait
                     self.handle_navigation_action(action, client).await?;
