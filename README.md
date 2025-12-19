@@ -2,13 +2,14 @@
 
 ## Introduction
 
-Zarumet is an mpd album art viewer for the terminal written in Rust.
+Zarumet is an mpd client for the terminal written in Rust.
 
 ![Zarumet Screenshot](/assets/screenshots/zarumet.png?raw=true)
 
 ## Dependencies
 
 - [mpd](https://musicpd.org)
+- A NerdFont
 - A terminal emulator that supports truecolor and UTF-8 encoding.
 
 ## 🦀 Installation
@@ -119,16 +120,44 @@ Configuration is stored in a TOML file. The default location is:
 `~/.config/zarumet/config.toml`.
 You can override this with the `-c` flag.
 
-Default configuration:
+<details>
+<summary>Default Configuration: </summary>
 
 ```Toml
 [mpd]
 address = "localhost:6600"
 
 [colors]
-album = "#fae280"
-artist = "#fae280"
 border = "#fae280"
-status = "#fae280"
-title = "#fae280"
+song_title = "#fae280"
+album = "#26a0a1"
+artist = "#d67751"
+border_title = "#8193af"
+progress_filled = "#26a0a1"
+progress_empty = "#1b1d0e"
+paused = "#e16a7c"
+playing = "#e16a7c"
+stopped = "#e16a7c"
+time_separator = "#e16a7c"
+time_duration = "#e16a7c"
+time_elapsed = "#e16a7c"
+queue_selected_highlight = "#b18a4a"
+queue_selected_text = "#1b1d0e"
+queue_album = "#26a0a1"
+queue_song_title = "#fae280"
+queue_artist = "#d67751"
+queue_position = "#e16a7c"
+queue_duration = "#e16a7c"
+top_accent = "#e16a7c"
+volume = "#26a0a1"
+volume_empty = "#1b1d0e"
+mode = "fae280"
+track_duration = "#e16a7c"
 ```
+
+</details>
+
+## ⚡ Inspired By
+
+- [rmpc](https://rmpc.mierak.dev/)
+- [inori](https://github.com/eshrh/inori)
