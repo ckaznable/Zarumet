@@ -19,6 +19,8 @@ pub struct SongInfo {
     pub progress: Option<f64>,
     pub elapsed: Option<std::time::Duration>,
     pub duration: Option<std::time::Duration>,
+    pub disc_number: u64,
+    pub track_number: u64,
 }
 
 impl SongInfo {
@@ -45,6 +47,7 @@ impl SongInfo {
         let file_path = song.file_path().to_path_buf();
         let format = song.format.clone();
         let duration = song.duration;
+        let (disc_number, track_number) = song.number();
 
         Self {
             title,
@@ -57,6 +60,8 @@ impl SongInfo {
             progress: None,
             elapsed: None,
             duration,
+            disc_number,
+            track_number,
         }
     }
     pub async fn set_max_art_size(client: &Client, size_bytes: usize) -> Result<(), CommandError> {
@@ -163,7 +168,11 @@ impl Library {
         for artist in &mut artists {
             artist.albums.sort_by(|a, b| a.name.cmp(&b.name));
             for album in &mut artist.albums {
-                album.tracks.sort_by(|a, b| a.title.cmp(&b.title));
+                album.tracks.sort_by(|a, b| {
+                    a.disc_number.cmp(&b.disc_number)
+                        .then(a.track_number.cmp(&b.track_number))
+                        .then(a.title.cmp(&b.title))
+                });
             }
         }
 
