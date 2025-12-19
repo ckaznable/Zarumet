@@ -18,10 +18,11 @@ pub fn create_queue_widget<'a>(
 ) -> List<'a> {
     let border_color = config.colors.border_color();
     let border_title_color = config.colors.border_title_color();
-    let text_color = config.colors.song_title_color();
     let queue_album_color = config.colors.queue_album_color();
     let queue_artist_color = config.colors.queue_artist_color();
     let queue_song_title_color = config.colors.queue_song_title_color();
+    let queue_position_color = config.colors.queue_position_color();
+    let queue_duration_color = config.colors.queue_duration_color();
 
     // Calculate available width inside the box (minus borders and padding)
     let inner_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
@@ -47,7 +48,7 @@ pub fn create_queue_widget<'a>(
             .map(|(i, song)| {
                 // Calculate available width for entire line using consistent max_num_width
                 let separator_width = 3; // " ║ "
-                let duration_display_width = 8; // " (MM:SS)"
+                let duration_display_width = 4; // "M:SS"
                 let remaining_width = inner_width
                     .saturating_sub(max_num_width + separator_width * 2 + duration_display_width);
 
@@ -60,7 +61,7 @@ pub fn create_queue_widget<'a>(
                         let total_seconds = duration.as_secs();
                         let minutes = total_seconds / 60;
                         let seconds = total_seconds % 60;
-                        format!(" ({:02}:{:02})", minutes, seconds)
+                        format!("{}:{:02}", minutes, seconds)
                     }
                     None => " (--:--)".to_string(),
                 };
@@ -84,9 +85,9 @@ pub fn create_queue_widget<'a>(
                 let mut queue_album_color = Style::default().fg(queue_album_color);
                 let mut queue_song_title_color = Style::default().fg(queue_song_title_color);
                 let mut queue_artist_color = Style::default().fg(queue_artist_color);
-                let mut text_color = Style::default().fg(text_color);
-                let mut duration_color = text_color;
-                let mut pos_color = text_color;
+                let mut border_color = Style::default().fg(border_color);
+                let mut duration_color = Style::default().fg(queue_duration_color);
+                let mut pos_color = Style::default().fg(queue_position_color);
 
                 // Apply background highlight for selected song
                 if is_selected {
@@ -99,13 +100,13 @@ pub fn create_queue_widget<'a>(
                     queue_artist_color = queue_artist_color
                         .bg(config.colors.queue_selected_highlight_color())
                         .fg(config.colors.queue_selected_text_color());
-                    text_color = text_color
+                    border_color = border_color
                         .bg(config.colors.queue_selected_highlight_color())
                         .fg(config.colors.queue_selected_text_color());
-                    duration_color = text_color
+                    duration_color = duration_color
                         .bg(config.colors.queue_selected_highlight_color())
                         .fg(config.colors.queue_selected_text_color());
-                    pos_color = text_color
+                    pos_color = pos_color
                         .bg(config.colors.queue_selected_highlight_color())
                         .fg(config.colors.queue_selected_text_color());
                 }
@@ -115,7 +116,7 @@ pub fn create_queue_widget<'a>(
                     queue_album_color = queue_album_color.bold().italic();
                     queue_song_title_color = queue_song_title_color.bold().italic();
                     queue_artist_color = queue_artist_color.bold().italic();
-                    text_color = text_color.bold().italic();
+                    border_color = border_color.bold().italic();
                     duration_color = duration_color.bold().italic();
                     pos_color = pos_color.bold().italic();
                 }
@@ -127,9 +128,9 @@ pub fn create_queue_widget<'a>(
 
                 // Each field should have its own style, but when selected should be overwritten by the selection styling
                 spans.push(Span::styled(title.clone(), queue_song_title_color));
-                spans.push(Span::styled(" ║ ", text_color));
+                spans.push(Span::styled(" ║ ", border_color));
                 spans.push(Span::styled(artist.clone(), queue_artist_color));
-                spans.push(Span::styled(" ║ ", text_color));
+                spans.push(Span::styled(" ║ ", border_color));
                 spans.push(Span::styled(album.clone(), queue_album_color));
                 spans.push(Span::styled(duration_str.clone(), duration_color));
 
@@ -150,7 +151,7 @@ pub fn create_queue_widget<'a>(
 
                     if remaining_width > 0 {
                         // Add spaces to fill the remaining width with the selected background color
-                        spans.push(Span::styled(" ".repeat(remaining_width), text_color));
+                        spans.push(Span::styled(" ".repeat(remaining_width), border_color));
                     }
                 }
 
@@ -170,7 +171,7 @@ pub fn create_queue_widget<'a>(
                 ))
                 .border_style(Style::default().fg(border_color)),
         )
-        .style(Style::default().fg(text_color))
+        .style(Style::default().fg(border_color))
         .highlight_style(Style::default())
         .repeat_highlight_symbol(true)
 }
