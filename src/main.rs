@@ -1,16 +1,15 @@
 // Module declarations
 mod app;
 mod binds;
-mod cli;
 mod config;
 mod mpd_handler;
 mod song;
 mod terminal;
 mod ui;
 
-use app::App;
+use app::cli::Args;
+use app::{App, constructor::AppConstructor, main_loop::AppMainLoop};
 use clap::Parser;
-use cli::Args;
 use terminal::{init_terminal, restore_terminal};
 
 #[tokio::main]
