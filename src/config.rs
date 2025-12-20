@@ -961,7 +961,7 @@ impl ColorsConfig {
     }
 
     fn default_mode() -> String {
-        "fae280".to_string()
+        "#fae280".to_string()
     }
 }
 
