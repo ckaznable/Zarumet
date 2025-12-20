@@ -109,11 +109,10 @@ A TUI MPD client with album art
 Usage: zarumet [OPTIONS]
 
 Options:
-  -c, --config <CONFIG>        Path to config file
-  -a, --address <ADDRESS>      MPD server address (overrides config)
-  -m, --music-dir <MUSIC_DIR>  Music directory path (overrides config)
-  -h, --help                   Print help
-  -V, --version                Print version
+  -c, --config <CONFIG>    Path to config file
+  -a, --address <ADDRESS>  MPD server address (overrides config)
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ## Configuration
