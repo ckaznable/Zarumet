@@ -4,7 +4,7 @@ version = "0.2.2"
 edition = "2024"
 authors = ["Immelancholy <lenalowes0@gmail.com>"]
 license = "MIT"
-description = "A terminal-based mpd album display"
+description = "A terminal-based mpd client with album display"
 homepage = "https://github.com/Immelancholy/zarumet"
 repository = "https://github.com/Immelancholy/zarumet"
 
