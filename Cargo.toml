@@ -1,6 +1,6 @@
 [package]
 name = "zarumet"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2024"
 authors = ["Immelancholy <lenalowes0@gmail.com>"]
 license = "MIT"
@@ -20,6 +20,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 toml = "0.9.8"
 clap = { version = "4.5.53", features = ["derive"] }
 futures = "0.3.31"
+unicode-width = "0.2.0"
 
 
 [profile.release]

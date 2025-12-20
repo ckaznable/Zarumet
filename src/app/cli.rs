@@ -19,9 +19,3 @@ pub struct Args {
     #[arg(short, long)]
     pub music_dir: Option<PathBuf>,
 }
-
-impl Args {
-    pub fn parse_args() -> Self {
-        Self::parse()
-    }
-}
