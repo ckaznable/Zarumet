@@ -14,8 +14,4 @@ pub struct Args {
     /// MPD server address (overrides config)
     #[arg(short, long)]
     pub address: Option<String>,
-
-    /// Music directory path (overrides config)
-    #[arg(short, long)]
-    pub music_dir: Option<PathBuf>,
 }
