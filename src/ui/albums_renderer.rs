@@ -10,7 +10,7 @@ use crate::config::Config;
 use crate::song::{Library, SongInfo};
 use crate::ui::menu::{MenuMode, PanelFocus};
 use crate::ui::widgets::{
-    create_empty_box, create_format_widget, create_left_box_bottom, create_song_widget, 
+    create_empty_box, create_format_widget, create_left_box_bottom, create_song_widget,
     create_top_box, render_image_widget,
 };
 use unicode_width::UnicodeWidthStr;
@@ -89,7 +89,7 @@ pub fn render_albums_mode(
             .map(|(artist_name, album)| {
                 // Calculate available width for album name
                 let available_width = left_horizontal_chunks[0].width.saturating_sub(4) as usize;
-                
+
                 // Create display text with album name and artist
                 let display_text = format!("{} - {}", album.name, artist_name);
                 let truncated_text = if display_text.width() > available_width {
@@ -97,7 +97,7 @@ pub fn render_albums_mode(
                 } else {
                     display_text
                 };
-                
+
                 ratatui::widgets::ListItem::new(vec![Line::from(truncated_text)])
             })
             .collect();
@@ -129,7 +129,9 @@ pub fn render_albums_mode(
 
         // Show tracks for selected album
         if let Some(selected_album_index) = artist_list_state.selected() {
-            if let Some((_artist_name, selected_album)) = library.all_albums.get(selected_album_index) {
+            if let Some((_artist_name, selected_album)) =
+                library.all_albums.get(selected_album_index)
+            {
                 let tracks_list: Vec<ratatui::widgets::ListItem> = selected_album
                     .tracks
                     .iter()
@@ -144,9 +146,11 @@ pub fn render_albums_mode(
                             None => "  --:--".to_string(),
                         };
 
-                        let available_width = left_horizontal_chunks[1].width.saturating_sub(4) as usize;
+                        let available_width =
+                            left_horizontal_chunks[1].width.saturating_sub(4) as usize;
                         let track_duration_width = track_duration_str.width();
-                        let max_track_title_width = available_width.saturating_sub(track_duration_width + 3);
+                        let max_track_title_width =
+                            available_width.saturating_sub(track_duration_width + 3);
 
                         // Truncate track title if needed to keep duration aligned
                         let truncated_track_title = if track.title.width() > max_track_title_width {
@@ -155,7 +159,8 @@ pub fn render_albums_mode(
                             track.title.clone()
                         };
 
-                        let filler_width = max_track_title_width.saturating_sub(truncated_track_title.width());
+                        let filler_width =
+                            max_track_title_width.saturating_sub(truncated_track_title.width());
                         let filler = " ".repeat(filler_width.max(0));
 
                         let track_text = format!("   {}{}", truncated_track_title, filler,);

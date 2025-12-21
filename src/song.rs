@@ -230,11 +230,16 @@ impl Library {
         }
         // Sort alphabetically by album name (case-insensitive), then by artist name for stability
         all_albums.sort_by(|a, b| {
-            a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase())
+            a.1.name
+                .to_lowercase()
+                .cmp(&b.1.name.to_lowercase())
                 .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
         });
 
-        Ok(Library { artists, all_albums })
+        Ok(Library {
+            artists,
+            all_albums,
+        })
     }
 
     /// Validate MPD connection with a simple ping

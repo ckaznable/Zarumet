@@ -317,7 +317,8 @@ impl Navigation for App {
                                 self.panel_focus = PanelFocus::Albums;
                                 // Initialize album selection when switching to albums panel
                                 if let Some(ref library) = self.library
-                                    && let Some(selected_artist_index) = self.artist_list_state.selected()
+                                    && let Some(selected_artist_index) =
+                                        self.artist_list_state.selected()
                                     && let Some(selected_artist) =
                                         library.artists.get(selected_artist_index)
                                 {
@@ -486,16 +487,21 @@ impl App {
                                 {
                                     // Compute display list to get total count
                                     let (display_items, _album_indices) =
-                                        compute_album_display_list(selected_artist, &self.expanded_albums);
+                                        compute_album_display_list(
+                                            selected_artist,
+                                            &self.expanded_albums,
+                                        );
 
                                     if !display_items.is_empty() {
-                                        let current = self.album_display_list_state.selected().unwrap_or(0);
+                                        let current =
+                                            self.album_display_list_state.selected().unwrap_or(0);
                                         if current > 0 {
                                             self.album_display_list_state.select(Some(current - 1));
                                         } else {
                                             // Wrap around to bottom
-                                            self.album_display_list_state
-                                                .select(Some(display_items.len().saturating_sub(1)));
+                                            self.album_display_list_state.select(Some(
+                                                display_items.len().saturating_sub(1),
+                                            ));
                                         }
 
                                         // Update the legacy album_list_state to point to the current album if on album
@@ -512,7 +518,8 @@ impl App {
                                             for (i, item) in display_items.iter().enumerate() {
                                                 if matches!(item, DisplayItem::Album(_)) {
                                                     if i == wrapped_index {
-                                                        self.album_list_state.select(Some(album_count));
+                                                        self.album_list_state
+                                                            .select(Some(album_count));
                                                         break;
                                                     }
                                                     album_count += 1;
@@ -540,8 +547,9 @@ impl App {
                                         self.artist_list_state.select(Some(current - 1));
                                     } else {
                                         // Wrap around to the bottom
-                                        self.artist_list_state
-                                            .select(Some(library.all_albums.len().saturating_sub(1)));
+                                        self.artist_list_state.select(Some(
+                                            library.all_albums.len().saturating_sub(1),
+                                        ));
                                     }
                                     // Clear track selection when navigating albums
                                     self.album_display_list_state.select(Some(0));
@@ -550,11 +558,14 @@ impl App {
                             PanelFocus::AlbumTracks => {
                                 // Navigate tracks in selected album
                                 if let Some(ref library) = self.library
-                                    && let Some(selected_album_index) = self.artist_list_state.selected()
-                                    && let Some((_, album)) = library.all_albums.get(selected_album_index)
+                                    && let Some(selected_album_index) =
+                                        self.artist_list_state.selected()
+                                    && let Some((_, album)) =
+                                        library.all_albums.get(selected_album_index)
                                     && !album.tracks.is_empty()
                                 {
-                                    let current = self.album_display_list_state.selected().unwrap_or(0);
+                                    let current =
+                                        self.album_display_list_state.selected().unwrap_or(0);
                                     if current > 0 {
                                         self.album_display_list_state.select(Some(current - 1));
                                     } else {
@@ -605,10 +616,14 @@ impl App {
                                 {
                                     // Compute display list to get total count
                                     let (display_items, _album_indices) =
-                                        compute_album_display_list(selected_artist, &self.expanded_albums);
+                                        compute_album_display_list(
+                                            selected_artist,
+                                            &self.expanded_albums,
+                                        );
 
                                     if !display_items.is_empty() {
-                                        let current = self.album_display_list_state.selected().unwrap_or(0);
+                                        let current =
+                                            self.album_display_list_state.selected().unwrap_or(0);
                                         if current < display_items.len().saturating_sub(1) {
                                             self.album_display_list_state.select(Some(current + 1));
                                         } else {
@@ -617,14 +632,16 @@ impl App {
                                         }
 
                                         // Update legacy album_list_state to point to current album if on album
-                                        if let Some(DisplayItem::Album(_)) = display_items.get(current + 1)
+                                        if let Some(DisplayItem::Album(_)) =
+                                            display_items.get(current + 1)
                                         {
                                             // Find which album this corresponds to
                                             let mut album_count = 0;
                                             for (i, item) in display_items.iter().enumerate() {
                                                 if matches!(item, DisplayItem::Album(_)) {
                                                     if i == current + 1 {
-                                                        self.album_list_state.select(Some(album_count));
+                                                        self.album_list_state
+                                                            .select(Some(album_count));
                                                         break;
                                                     }
                                                     album_count += 1;
@@ -661,11 +678,14 @@ impl App {
                             PanelFocus::AlbumTracks => {
                                 // Navigate tracks in selected album
                                 if let Some(ref library) = self.library
-                                    && let Some(selected_album_index) = self.artist_list_state.selected()
-                                    && let Some((_, album)) = library.all_albums.get(selected_album_index)
+                                    && let Some(selected_album_index) =
+                                        self.artist_list_state.selected()
+                                    && let Some((_, album)) =
+                                        library.all_albums.get(selected_album_index)
                                     && !album.tracks.is_empty()
                                 {
-                                    let current = self.album_display_list_state.selected().unwrap_or(0);
+                                    let current =
+                                        self.album_display_list_state.selected().unwrap_or(0);
                                     if current < album.tracks.len().saturating_sub(1) {
                                         self.album_display_list_state.select(Some(current + 1));
                                     } else {
