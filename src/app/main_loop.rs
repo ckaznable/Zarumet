@@ -1,21 +1,26 @@
 use std::io::Cursor;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use crossterm::event;
-use futures::executor::block_on;
-use mpd_client::Client;
+use mpd_client::client::ConnectionEvent;
 use mpd_client::responses::PlayState;
+use mpd_client::Client;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 
 use super::App;
 use crate::app::{event_handlers::EventHandlers, mpd_updates::MPDUpdates};
 use crate::ui::Protocol;
 
-/// Minimum interval between MPD status polls (in milliseconds)
-const MPD_POLL_INTERVAL_MS: u64 = 200;
+/// Interval for progress bar updates when playing (in milliseconds)
+const PROGRESS_UPDATE_INTERVAL_MS: u64 = 500;
+
+/// Message type for cover art loading results
+enum CoverArtMessage {
+    Loaded(Option<Vec<u8>>, PathBuf),
+}
 
 /// Trait for main application loop
 pub trait AppMainLoop {
@@ -30,14 +35,28 @@ impl AppMainLoop for App {
         self.running = true;
 
         // Connect to MPD
-        log::info!("Attempting to connect to MPD at: {}", self.config.mpd.address);
-        let connection = TcpStream::connect(&self.config.mpd.address).await.inspect_err(|e| {
-            crate::logging::log_mpd_connection(&self.config.mpd.address, false, Some(&e.to_string()));
-        })?;
-        let (client, _state_changes) = Client::connect(connection).await.inspect_err(|e| {
-            crate::logging::log_mpd_connection(&self.config.mpd.address, false, Some(&e.to_string()));
-        })?;
-        
+        log::info!(
+            "Attempting to connect to MPD at: {}",
+            self.config.mpd.address
+        );
+        let connection = TcpStream::connect(&self.config.mpd.address)
+            .await
+            .inspect_err(|e| {
+                crate::logging::log_mpd_connection(
+                    &self.config.mpd.address,
+                    false,
+                    Some(&e.to_string()),
+                );
+            })?;
+        let (client, mut state_changes) =
+            Client::connect(connection).await.inspect_err(|e| {
+                crate::logging::log_mpd_connection(
+                    &self.config.mpd.address,
+                    false,
+                    Some(&e.to_string()),
+                );
+            })?;
+
         crate::logging::log_mpd_connection(&self.config.mpd.address, true, None);
 
         match crate::song::SongInfo::set_max_art_size(&client, 5 * 1024 * 1024).await {
@@ -63,10 +82,10 @@ impl AppMainLoop for App {
         let mut picker = Picker::from_query_stdio().unwrap();
         picker.set_background_color([0, 0, 0, 0]);
 
-        // Fetch initial song info
-        self.update_current_song(&client).await?;
+        // Fetch initial song info and status
+        self.run_updates(&client).await?;
 
-        // Track the current song's file path (not the image path)
+        // Track the current song's file path
         let mut current_song_file: Option<PathBuf> = self
             .current_song
             .as_ref()
@@ -75,30 +94,27 @@ impl AppMainLoop for App {
         // Track playback state for PipeWire sample rate control
         #[allow(unused_variables)]
         let mut last_play_state: Option<PlayState> = None;
-        
-        // Track last MPD poll time for throttling
-        let mut last_mpd_poll = Instant::now();
 
-        // Try to get initial image
-        let initial_image = self
-            .current_song
-            .as_ref()
-            .and_then(|song| block_on(song.load_cover(&client)));
+        // Channel for cover art loading results
+        let (cover_tx, mut cover_rx) = mpsc::channel::<CoverArtMessage>(1);
 
-        // Create protocol with initial image (if available)
-        let mut protocol = Protocol {
-            image: initial_image
-                .as_ref()
-                .and_then(|raw_data| {
-                    image::ImageReader::new(Cursor::new(raw_data))
-                        .with_guessed_format()
-                        .ok()
-                })
-                .and_then(|reader| reader.decode().ok())
-                .map(|dyn_img| picker.new_resize_protocol(dyn_img)),
-        };
+        // Load initial cover art in background
+        if let Some(ref song) = self.current_song {
+            let file_path = song.file_path.clone();
+            spawn_cover_art_loader(&client, file_path, cover_tx.clone());
+        }
+
+        // Create protocol with no initial image (will be loaded async)
+        let mut protocol = Protocol { image: None };
+
+        // Progress update interval
+        let progress_interval = tokio::time::interval(Duration::from_millis(PROGRESS_UPDATE_INTERVAL_MS));
+        tokio::pin!(progress_interval);
+
+        log::info!("Entering event-driven main loop");
 
         while self.running {
+            // Render the UI
             terminal.draw(|frame| {
                 crate::ui::render(
                     frame,
@@ -127,93 +143,202 @@ impl AppMainLoop for App {
             // Update key bindings for timeouts
             self.key_binds.update();
 
-            // Poll for events with a timeout to allow periodic updates
-            if event::poll(Duration::from_millis(10))? {
-                self.handle_crossterm_events(&client).await?;
-            }
-
-            // Update song info, queue, and status - throttled to reduce MPD load
-            // Only poll if:
-            // 1. force_update is set (after user action), OR
-            // 2. Enough time has passed since last poll
-            let now = Instant::now();
-            let time_since_poll = now.duration_since(last_mpd_poll);
-            
-            if self.force_update || time_since_poll >= Duration::from_millis(MPD_POLL_INTERVAL_MS) {
-                self.run_updates(&client).await?;
-                last_mpd_poll = now;
-                self.force_update = false;
-            }
-
-            // Check if the song changed (not just the image path)
-            let new_song_file: Option<PathBuf> = self
-                .current_song
-                .as_ref()
-                .map(|song| song.file_path.clone());
-
-            if new_song_file != current_song_file {
-                // Song changed, reload the cover art
-                let new_image = self
-                    .current_song
-                    .as_ref()
-                    .and_then(|song| block_on(song.load_cover(&client)));
-
-                protocol.image = new_image
-                    .as_ref()
-                    .and_then(|raw_data| {
-                        image::ImageReader::new(Cursor::new(raw_data))
-                            .with_guessed_format()
-                            .ok()
-                    })
-                    .and_then(|reader| reader.decode().ok())
-                    .map(|dyn_img| picker.new_resize_protocol(dyn_img));
-
-                // Update PipeWire sample rate if bit-perfect mode enabled, available, and playing
-                #[cfg(target_os = "linux")]
-                if self.bit_perfect_enabled
-                    && self.config.pipewire.is_available()
-                    && let Some(ref status) = self.mpd_status
-                    && status.state == PlayState::Playing
-                    && let Some(ref song) = self.current_song
-                    && let Some(song_rate) = song.sample_rate()
-                {
-                    let target_rate = self.config.pipewire.resolve_rate(song_rate);
-                    let _ = crate::pipewire::set_sample_rate(target_rate);
+            // Event-driven loop using tokio::select!
+            tokio::select! {
+                // Keyboard events (with short timeout for responsive UI)
+                _ = tokio::time::sleep(Duration::from_millis(10)) => {
+                    // Check for keyboard events non-blocking
+                    if crossterm::event::poll(Duration::from_millis(0))? {
+                        self.handle_crossterm_events(&client).await?;
+                        
+                        // If user action requires update, do it immediately
+                        if self.force_update {
+                            self.run_updates(&client).await?;
+                            self.force_update = false;
+                            
+                            // Check for song change after update
+                            check_song_change(
+                                &mut current_song_file,
+                                &self.current_song,
+                                &client,
+                                &cover_tx,
+                            );
+                        }
+                    }
                 }
 
-                current_song_file = new_song_file;
-            }
-
-            // Handle PipeWire sample rate based on playback state changes
-            #[cfg(target_os = "linux")]
-            if self.bit_perfect_enabled && self.config.pipewire.is_available() {
-                let current_play_state = self.mpd_status.as_ref().map(|s| s.state);
-
-                if current_play_state != last_play_state {
-                    match current_play_state {
-                        Some(PlayState::Playing) => {
-                            // Started playing - set sample rate to match song
-                            if let Some(ref song) = self.current_song
-                                && let Some(song_rate) = song.sample_rate()
-                            {
-                                let target_rate = self.config.pipewire.resolve_rate(song_rate);
-                                let _ = crate::pipewire::set_sample_rate(target_rate);
-                            }
+                // MPD state change notifications
+                mpd_event = state_changes.next() => {
+                    match mpd_event {
+                        Some(ConnectionEvent::SubsystemChange(subsystem)) => {
+                            log::debug!("MPD subsystem change: {:?}", subsystem);
+                            
+                            // Update state based on what changed
+                            self.run_updates(&client).await?;
+                            
+                            // Check for song change
+                            check_song_change(
+                                &mut current_song_file,
+                                &self.current_song,
+                                &client,
+                                &cover_tx,
+                            );
+                            
+                            // Handle PipeWire sample rate changes
+                            #[cfg(target_os = "linux")]
+                            handle_pipewire_state_change(
+                                &self.config,
+                                self.bit_perfect_enabled,
+                                &self.mpd_status,
+                                &self.current_song,
+                                &mut last_play_state,
+                            );
                         }
-                        Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
-                            // Paused or stopped - reset to automatic rate
-                            if last_play_state == Some(PlayState::Playing) {
-                                #[cfg(target_os = "linux")]
-                                if self.config.pipewire.is_available() {
-                                    let _ = crate::pipewire::reset_sample_rate();
+                        Some(ConnectionEvent::ConnectionClosed(err)) => {
+                            log::error!("MPD connection closed: {:?}", err);
+                            self.running = false;
+                        }
+                        None => {
+                            log::info!("MPD connection closed cleanly");
+                            self.running = false;
+                        }
+                    }
+                }
+
+                // Progress bar updates (only when playing)
+                _ = progress_interval.tick() => {
+                    // Only fetch status for progress updates when playing
+                    if let Some(ref status) = self.mpd_status
+                        && status.state == PlayState::Playing
+                    {
+                        // Just update status for progress bar, not full update
+                        if let Ok(new_status) = client.command(mpd_client::commands::Status).await {
+                            let progress = match (new_status.elapsed, new_status.duration) {
+                                (Some(elapsed), Some(duration)) => {
+                                    Some(elapsed.as_secs_f64() / duration.as_secs_f64())
                                 }
+                                _ => None,
+                            };
+                            
+                            if let Some(ref mut song) = self.current_song {
+                                song.update_playback_info(Some(new_status.state), progress);
+                                song.update_time_info(new_status.elapsed, new_status.duration);
+                            }
+                            self.mpd_status = Some(new_status);
+                        }
+                    }
+                }
+
+                // Cover art loading results
+                Some(msg) = cover_rx.recv() => {
+                    match msg {
+                        CoverArtMessage::Loaded(data, file_path) => {
+                            // Only update if this is still the current song
+                            if current_song_file.as_ref() == Some(&file_path) {
+                                protocol.image = data
+                                    .as_ref()
+                                    .and_then(|raw_data| {
+                                        image::ImageReader::new(Cursor::new(raw_data))
+                                            .with_guessed_format()
+                                            .ok()
+                                    })
+                                    .and_then(|reader| reader.decode().ok())
+                                    .map(|dyn_img| picker.new_resize_protocol(dyn_img));
+                                
+                                log::debug!("Cover art loaded for {:?}", file_path);
                             }
                         }
                     }
-                    last_play_state = current_play_state;
                 }
             }
         }
+
+        log::info!("Exiting main loop");
         Ok(())
+    }
+}
+
+/// Spawn a background task to load cover art
+fn spawn_cover_art_loader(
+    client: &Client,
+    file_path: PathBuf,
+    tx: mpsc::Sender<CoverArtMessage>,
+) {
+    let client = client.clone();
+    let file_path_clone = file_path.clone();
+
+    tokio::spawn(async move {
+        let uri = file_path_clone.to_string_lossy();
+        let result = client.album_art(&uri).await;
+
+        let data = match result {
+            Ok(Some((raw_data, _mime))) => Some(raw_data.to_vec()),
+            Ok(None) => None,
+            Err(e) => {
+                log::debug!("Failed to load cover art: {}", e);
+                None
+            }
+        };
+
+        // Send result back (ignore error if receiver dropped)
+        let _ = tx.send(CoverArtMessage::Loaded(data, file_path_clone)).await;
+    });
+}
+
+/// Check if the song changed and trigger cover art loading if needed
+fn check_song_change(
+    current_song_file: &mut Option<PathBuf>,
+    current_song: &Option<crate::song::SongInfo>,
+    client: &Client,
+    cover_tx: &mpsc::Sender<CoverArtMessage>,
+) {
+    let new_song_file: Option<PathBuf> = current_song.as_ref().map(|song| song.file_path.clone());
+
+    if new_song_file != *current_song_file {
+        log::debug!("Song changed: {:?} -> {:?}", current_song_file, new_song_file);
+
+        // Start loading cover art in background
+        if let Some(ref file_path) = new_song_file {
+            spawn_cover_art_loader(client, file_path.clone(), cover_tx.clone());
+        }
+
+        *current_song_file = new_song_file;
+    }
+}
+
+/// Handle PipeWire sample rate changes based on playback state
+#[cfg(target_os = "linux")]
+fn handle_pipewire_state_change(
+    config: &crate::config::Config,
+    bit_perfect_enabled: bool,
+    mpd_status: &Option<mpd_client::responses::Status>,
+    current_song: &Option<crate::song::SongInfo>,
+    last_play_state: &mut Option<PlayState>,
+) {
+    if !bit_perfect_enabled || !config.pipewire.is_available() {
+        return;
+    }
+
+    let current_play_state = mpd_status.as_ref().map(|s| s.state);
+
+    if current_play_state != *last_play_state {
+        match current_play_state {
+            Some(PlayState::Playing) => {
+                // Started playing - set sample rate to match song
+                if let Some(song) = current_song
+                    && let Some(song_rate) = song.sample_rate()
+                {
+                    let target_rate = config.pipewire.resolve_rate(song_rate);
+                    let _ = crate::pipewire::set_sample_rate(target_rate);
+                }
+            }
+            Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
+                // Paused or stopped - reset to automatic rate
+                if *last_play_state == Some(PlayState::Playing) {
+                    let _ = crate::pipewire::reset_sample_rate();
+                }
+            }
+        }
+        *last_play_state = current_play_state;
     }
 }

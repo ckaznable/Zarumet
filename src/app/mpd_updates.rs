@@ -5,27 +5,10 @@ use crate::song::SongInfo;
 
 /// Trait for MPD-related updates
 pub trait MPDUpdates {
-    async fn update_current_song(&mut self, client: &Client) -> color_eyre::Result<()>;
     async fn run_updates(&mut self, client: &Client) -> color_eyre::Result<()>;
 }
 
 impl MPDUpdates for App {
-    /// Update the current song information from MPD
-    async fn update_current_song(&mut self, client: &Client) -> color_eyre::Result<()> {
-        match client.command(commands::CurrentSong).await {
-            Ok(Some(song_in_queue)) => {
-                self.current_song = Some(SongInfo::from_song(&song_in_queue.song));
-            }
-            Ok(None) => {
-                self.current_song = None;
-            }
-            Err(_) => {
-                // Keep the previous song info on error
-            }
-        }
-        Ok(())
-    }
-
     /// Run update functions concurrently with optimized result processing
     async fn run_updates(&mut self, client: &Client) -> color_eyre::Result<()> {
         // Run MPD commands concurrently
