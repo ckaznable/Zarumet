@@ -1,5 +1,7 @@
 use crate::config::Config;
+use crate::logging::log_mpd_command;
 use mpd_client::{client::CommandError, commands, responses::PlayState};
+use std::fmt;
 
 /// Actions that can be performed on MPD
 #[derive(Debug, Clone)]
@@ -73,9 +75,94 @@ pub enum MPDAction {
     ToggleBitPerfect,
 }
 
+impl fmt::Display for MPDAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MPDAction::TogglePlayPause => write!(f, "TogglePlayPause"),
+            MPDAction::Next => write!(f, "Next"),
+            MPDAction::Previous => write!(f, "Previous"),
+            MPDAction::Random => write!(f, "Random"),
+            MPDAction::Repeat => write!(f, "Repeat"),
+            MPDAction::Single => write!(f, "Single"),
+            MPDAction::Consume => write!(f, "Consume"),
+            MPDAction::VolumeUp => write!(f, "VolumeUp"),
+            MPDAction::VolumeUpFine => write!(f, "VolumeUpFine"),
+            MPDAction::VolumeDown => write!(f, "VolumeDown"),
+            MPDAction::VolumeDownFine => write!(f, "VolumeDownFine"),
+            MPDAction::ToggleMute => write!(f, "ToggleMute"),
+            MPDAction::SeekForward => write!(f, "SeekForward"),
+            MPDAction::SeekBackward => write!(f, "SeekBackward"),
+            MPDAction::ClearQueue => write!(f, "ClearQueue"),
+            MPDAction::RemoveFromQueue => write!(f, "RemoveFromQueue"),
+            MPDAction::MoveUpInQueue => write!(f, "MoveUpInQueue"),
+            MPDAction::MoveDownInQueue => write!(f, "MoveDownInQueue"),
+            MPDAction::QueueUp => write!(f, "QueueUp"),
+            MPDAction::QueueDown => write!(f, "QueueDown"),
+            MPDAction::PlaySelected => write!(f, "PlaySelected"),
+            MPDAction::Quit => write!(f, "Quit"),
+            MPDAction::Refresh => write!(f, "Refresh"),
+            MPDAction::SwitchToQueueMenu => write!(f, "SwitchToQueueMenu"),
+            MPDAction::SwitchToTracks => write!(f, "SwitchToTracks"),
+            MPDAction::SwitchPanelLeft => write!(f, "SwitchPanelLeft"),
+            MPDAction::SwitchPanelRight => write!(f, "SwitchPanelRight"),
+            MPDAction::NavigateUp => write!(f, "NavigateUp"),
+            MPDAction::NavigateDown => write!(f, "NavigateDown"),
+            MPDAction::ToggleAlbumExpansion => write!(f, "ToggleAlbumExpansion"),
+            MPDAction::AddSongToQueue => write!(f, "AddSongToQueue"),
+            MPDAction::CycleModeLeft => write!(f, "CycleModeLeft"),
+            MPDAction::CycleModeRight => write!(f, "CycleModeRight"),
+            MPDAction::ScrollUp => write!(f, "ScrollUp"),
+            MPDAction::ScrollDown => write!(f, "ScrollDown"),
+            MPDAction::GoToTop => write!(f, "GoToTop"),
+            MPDAction::GoToBottom => write!(f, "GoToBottom"),
+            MPDAction::ToggleBitPerfect => write!(f, "ToggleBitPerfect"),
+        }
+    }
+}
+
 impl MPDAction {
+    /// Returns true if this action sends commands to MPD
+    fn is_mpd_command(&self) -> bool {
+        matches!(
+            self,
+            MPDAction::TogglePlayPause
+                | MPDAction::Next
+                | MPDAction::Previous
+                | MPDAction::Random
+                | MPDAction::Repeat
+                | MPDAction::Single
+                | MPDAction::Consume
+                | MPDAction::VolumeUp
+                | MPDAction::VolumeUpFine
+                | MPDAction::VolumeDown
+                | MPDAction::VolumeDownFine
+                | MPDAction::ToggleMute
+                | MPDAction::SeekForward
+                | MPDAction::SeekBackward
+                | MPDAction::ClearQueue
+        )
+    }
+
     /// Execute the action on the MPD client
     pub async fn execute(
+        &self,
+        client: &mpd_client::Client,
+        config: &Config,
+    ) -> Result<(), CommandError> {
+        let result = self.execute_inner(client, config).await;
+
+        // Log MPD commands (not UI-only actions)
+        if self.is_mpd_command() {
+            match &result {
+                Ok(()) => log_mpd_command(&self.to_string(), true, None),
+                Err(e) => log_mpd_command(&self.to_string(), false, Some(&e.to_string())),
+            }
+        }
+
+        result
+    }
+
+    async fn execute_inner(
         &self,
         client: &mpd_client::Client,
         config: &Config,

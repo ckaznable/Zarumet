@@ -7,6 +7,7 @@ use ratatui::widgets::ListState;
 use std::path::PathBuf;
 
 /// Trait for App construction
+#[allow(dead_code)]
 pub trait AppConstructor {
     fn new(args: Args) -> color_eyre::Result<Self>
     where
@@ -67,12 +68,21 @@ pub fn save_bit_perfect_state(enabled: bool) -> std::io::Result<()> {
 impl AppConstructor for App {
     /// Construct a new instance of [`App`].
     fn new(args: Args) -> color_eyre::Result<Self> {
-        let mut config = Config::load(args.config)?;
+        let config_path = args.config.clone();
+        let address = args.address.clone();
+        let mut config = Config::load(config_path)?;
 
-        if let Some(address) = args.address {
-            config.mpd.address = address;
+        if let Some(addr) = address {
+            config.mpd.address = addr;
         }
 
+        Self::new_with_config(config, args)
+    }
+}
+
+impl App {
+    /// Construct a new instance of [`App`] with pre-loaded config.
+    pub fn new_with_config(config: Config, args: Args) -> color_eyre::Result<Self> {
         let queue_list_state = ListState::default();
         // Don't select anything initially - will be set when queue is populated
 

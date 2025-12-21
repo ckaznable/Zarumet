@@ -1,3 +1,4 @@
+use log::error;
 use mpd_client::{Client, commands};
 
 use super::App;
@@ -71,7 +72,7 @@ impl Navigation for App {
                         .command(mpd_client::commands::Play::song(song_position))
                         .await
                     {
-                        eprintln!("Error playing selected song: {}", e);
+                        error!("Error playing selected song: {}", e);
                     }
                 }
             }
@@ -87,7 +88,7 @@ impl Navigation for App {
                         .command(mpd_client::commands::Move::position(from_pos).to_position(to_pos))
                         .await
                     {
-                        eprintln!("Error moving song up in queue: {}", e);
+                        error!("Error moving song up in queue: {}", e);
                     } else {
                         // Update selected index to follow the moved song
                         self.queue_list_state.select(Some(selected - 1));
@@ -106,7 +107,7 @@ impl Navigation for App {
                         .command(mpd_client::commands::Move::position(from_pos).to_position(to_pos))
                         .await
                     {
-                        eprintln!("Error moving song down in queue: {}", e);
+                        error!("Error moving song down in queue: {}", e);
                     } else {
                         // Update selected index to follow the moved song
                         self.queue_list_state.select(Some(selected + 1));
@@ -125,7 +126,7 @@ impl Navigation for App {
                         .command(mpd_client::commands::Delete::position(song_position))
                         .await
                     {
-                        eprintln!("Error removing song from queue: {}", e);
+                        error!("Error removing song from queue: {}", e);
                     } else {
                         // Update selected index to stay within bounds
                         if self.queue.is_empty() {
@@ -215,7 +216,7 @@ impl Navigation for App {
             _ => {
                 // Execute MPD command for other actions
                 if let Err(e) = action.execute(client, &self.config).await {
-                    eprintln!("Error executing MPD command: {}", e);
+                    error!("Error executing MPD command: {}", e);
                 }
             }
         }
@@ -589,11 +590,11 @@ impl App {
                             .command(commands::Add::uri(file_path.to_str().unwrap()))
                             .await
                         {
-                            eprintln!("Error adding song to queue: {}", e);
+                            error!("Error adding song to queue: {}", e);
                         } else if queue_was_empty {
                             // Start playback if queue was empty
                             if let Err(e) = client.command(commands::Play::current()).await {
-                                eprintln!("Error starting playback: {}", e);
+                                error!("Error starting playback: {}", e);
                             }
                         }
                     }
@@ -618,12 +619,12 @@ impl App {
                     .command(commands::Add::uri(song.file_path.to_str().unwrap()))
                     .await
                 {
-                    eprintln!("Error adding song to queue: {}", e);
+                    error!("Error adding song to queue: {}", e);
                 }
             }
             // Start playback if queue was empty
             if queue_was_empty && let Err(e) = client.command(commands::Play::current()).await {
-                eprintln!("Error starting playback: {}", e);
+                error!("Error starting playback: {}", e);
             }
         }
         Ok(())

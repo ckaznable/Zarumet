@@ -5,6 +5,7 @@ use super::App;
 use crate::app::constructor::save_bit_perfect_state;
 use crate::app::mpd_handler::MPDAction;
 use crate::app::navigation::Navigation;
+use crate::logging::log_user_interaction;
 
 /// Trait for event handling
 pub trait EventHandlers {
@@ -34,6 +35,10 @@ impl EventHandlers for App {
             .key_binds
             .handle_key(key, &self.menu_mode, &self.panel_focus)
         {
+            // Log user interaction with menu context
+            let context = format!("menu:{:?}, panel:{:?}", self.menu_mode, self.panel_focus);
+            log_user_interaction(&action.to_string(), Some(&context));
+
             match action {
                 MPDAction::Quit => self.quit(),
                 MPDAction::ToggleBitPerfect => {

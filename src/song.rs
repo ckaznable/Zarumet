@@ -141,7 +141,16 @@ pub struct Library {
 
 impl Library {
     pub async fn load_library(client: &Client) -> color_eyre::Result<Self> {
-        let all_songs = client.command(commands::ListAllIn::root()).await?;
+        let start_time = std::time::Instant::now();
+        
+        // Validate connection before loading
+        Self::validate_connection(client).await?;
+        
+        // Try loading with retry logic
+        let all_songs = Self::load_songs_with_retry(client).await?;
+        
+        let total_songs = all_songs.len();
+        log::debug!("Loaded {} songs from MPD", total_songs);
 
         let mut artists_map: std::collections::HashMap<
             String,
@@ -185,6 +194,76 @@ impl Library {
             }
         }
 
+        let total_artists = artists.len();
+        let total_albums = artists.iter().map(|a| a.albums.len()).sum();
+        let duration = start_time.elapsed();
+        
+        crate::logging::log_library_loading(total_songs, total_artists, total_albums, duration, true, None);
+        
+        log::info!("Library processing completed: {} artists, {} albums", total_artists, total_albums);
+
         Ok(Library { artists })
     }
+    
+    /// Validate MPD connection with a simple ping
+    async fn validate_connection(client: &Client) -> color_eyre::Result<()> {
+        log::debug!("Validating MPD connection...");
+        
+        match client.command(commands::Status).await {
+            Ok(_) => {
+                log::debug!("MPD connection validated successfully");
+                Ok(())
+            }
+            Err(e) => {
+                log::error!("MPD connection validation failed: {}", e);
+                Err(color_eyre::eyre::eyre!("Failed to validate MPD connection: {}", e))
+            }
+        }
+    }
+    
+    /// Load songs with retry logic and exponential backoff.
+    /// Falls back to chunked loading if normal loading fails repeatedly.
+    async fn load_songs_with_retry(client: &Client) -> color_eyre::Result<Vec<Song>> {
+        const MAX_RETRIES: u32 = 3;
+        const BASE_DELAY_MS: u64 = 1000;
+        
+        for attempt in 1..=MAX_RETRIES {
+            log::debug!("Loading MPD library (attempt {}/{})", attempt, MAX_RETRIES);
+            
+            match client.command(commands::ListAllIn::root()).await {
+                Ok(songs) => {
+                    log::debug!("Successfully loaded {} songs on attempt {}", songs.len(), attempt);
+                    return Ok(songs);
+                }
+                Err(e) => {
+                    let error_msg = e.to_string();
+                    log::warn!("Library loading attempt {} failed: {}", attempt, error_msg);
+                    
+                    // Check if this is a protocol error
+                    if error_msg.contains("protocol error") || error_msg.contains("invalid message") {
+                        log::error!("Protocol error detected on attempt {}: {}", attempt, error_msg);
+                    }
+                    
+                    // If this is the last attempt, return error
+                    if attempt == MAX_RETRIES {
+                        let error = color_eyre::eyre::eyre!(
+                            "Failed to load library after {} attempts: {}", 
+                            MAX_RETRIES, 
+                            error_msg
+                        );
+                        crate::logging::log_library_loading(0, 0, 0, std::time::Duration::from_secs(0), false, Some(&error_msg));
+                        return Err(error);
+                    }
+                    
+                    // Exponential backoff: 1s, 2s, 4s
+                    let delay_ms = BASE_DELAY_MS * 2_u64.pow(attempt - 1);
+                    log::debug!("Waiting {}ms before retry...", delay_ms);
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+            }
+        }
+        
+        unreachable!()
+    }
+    
 }

@@ -27,12 +27,23 @@ impl AppMainLoop for App {
         self.running = true;
 
         // Connect to MPD
-        let connection = TcpStream::connect(&self.config.mpd.address).await?;
-        let (client, _state_changes) = Client::connect(connection).await?;
+        log::info!("Attempting to connect to MPD at: {}", self.config.mpd.address);
+        let connection = TcpStream::connect(&self.config.mpd.address).await.inspect_err(|e| {
+            crate::logging::log_mpd_connection(&self.config.mpd.address, false, Some(&e.to_string()));
+        })?;
+        let (client, _state_changes) = Client::connect(connection).await.inspect_err(|e| {
+            crate::logging::log_mpd_connection(&self.config.mpd.address, false, Some(&e.to_string()));
+        })?;
+        
+        crate::logging::log_mpd_connection(&self.config.mpd.address, true, None);
 
         match crate::song::SongInfo::set_max_art_size(&client, 5 * 1024 * 1024).await {
-            Ok(_) => {}
-            Err(e) => eprintln!("Failed to set MPD binary limit: {}", e),
+            Ok(_) => {
+                log::debug!("Set MPD binary limit to 5MB");
+            }
+            Err(e) => {
+                log::warn!("Failed to set MPD binary limit: {}", e);
+            }
         }
 
         // Load library
@@ -176,7 +187,10 @@ impl AppMainLoop for App {
                         Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
                             // Paused or stopped - reset to automatic rate
                             if last_play_state == Some(PlayState::Playing) {
-                                let _ = crate::pipewire::reset_sample_rate();
+                                #[cfg(target_os = "linux")]
+                                if self.config.pipewire.is_available() {
+                                    let _ = crate::pipewire::reset_sample_rate();
+                                }
                             }
                         }
                     }
