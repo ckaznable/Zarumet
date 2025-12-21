@@ -67,7 +67,7 @@ quit = [
     "esc",
     "q",
     "ctrl-c",
-    "q q",
+    "shift-z shift-z"
 ]
 refresh = ["u"]
 switch_to_queue_menu = ["1"]
@@ -96,7 +96,6 @@ play_selected = [
 remove_from_queue = [
     "x",
     "backspace",
-    "d d",
 ]
 move_up_in_queue = [
     "ctrl-k",

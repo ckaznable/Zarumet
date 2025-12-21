@@ -184,6 +184,7 @@ impl AppMainLoop for App {
                                 &self.current_song,
                                 &client,
                                 &cover_tx,
+                                &mut protocol,
                             );
                         }
                     }
@@ -204,6 +205,7 @@ impl AppMainLoop for App {
                                 &self.current_song,
                                 &client,
                                 &cover_tx,
+                                &mut protocol,
                             );
 
                             // Handle PipeWire sample rate changes
@@ -312,6 +314,7 @@ fn check_song_change(
     current_song: &Option<crate::song::SongInfo>,
     client: &Client,
     cover_tx: &mpsc::Sender<CoverArtMessage>,
+    protocol: &mut crate::ui::Protocol,
 ) {
     let new_song_file: Option<PathBuf> = current_song.as_ref().map(|song| song.file_path.clone());
 
@@ -321,6 +324,11 @@ fn check_song_change(
             current_song_file,
             new_song_file
         );
+
+        // Clear protocol image when there's no current song
+        if current_song.is_none() {
+            protocol.image = None;
+        }
 
         // Start loading cover art in background
         if let Some(ref file_path) = new_song_file {

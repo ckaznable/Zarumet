@@ -154,12 +154,9 @@ impl KeyBinds {
                     .collect();
 
                 if possible_matches.is_empty() {
-                    // No match, reset and try first key as single key
-                    let first_key = sequence[0];
+                    // No match, reset sequence without fallback
                     self.current_state = KeyState::Idle;
-
-                    // Try the first key as a single key
-                    self.handle_key(KeyEvent::new(first_key.1, first_key.0), mode, panel_focus)
+                    None
                 } else {
                     // Continue waiting, update timeout
                     *timeout = Instant::now() + self.default_timeout;

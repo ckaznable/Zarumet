@@ -199,7 +199,7 @@ pub struct BindsConfig {
     pub single: Vec<String>,
     #[serde(default = "BindsConfig::default_consume")]
     pub consume: Vec<String>,
-    #[serde(default = "BindsConfig::default_quit")]
+    #[serde(default = "BindsConfig::default_quit_enhanced")]
     pub quit: Vec<String>,
     #[serde(default = "BindsConfig::default_refresh")]
     pub refresh: Vec<String>,
@@ -585,16 +585,13 @@ impl BindsConfig {
     fn default_consume() -> Vec<String> {
         vec!["c".to_string()]
     }
-    fn default_quit() -> Vec<String> {
-        vec!["esc".to_string(), "q".to_string(), "ctrl-c".to_string()]
-    }
 
     fn default_quit_enhanced() -> Vec<String> {
         vec![
             "esc".to_string(),
             "q".to_string(),
             "ctrl-c".to_string(),
-            "q q".to_string(),
+            "shift-z shift-z".to_string(),
         ]
     }
     fn default_refresh() -> Vec<String> {
