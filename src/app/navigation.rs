@@ -84,9 +84,7 @@ impl Navigation for App {
                     let from_pos: mpd_client::commands::SongPosition = selected.into();
                     let to_pos: mpd_client::commands::SongPosition = (selected - 1).into();
                     if let Err(e) = client
-                        .command(
-                            mpd_client::commands::Move::position(from_pos).to_position(to_pos),
-                        )
+                        .command(mpd_client::commands::Move::position(from_pos).to_position(to_pos))
                         .await
                     {
                         eprintln!("Error moving song up in queue: {}", e);
@@ -105,9 +103,7 @@ impl Navigation for App {
                     let from_pos: mpd_client::commands::SongPosition = selected.into();
                     let to_pos: mpd_client::commands::SongPosition = (selected + 1).into();
                     if let Err(e) = client
-                        .command(
-                            mpd_client::commands::Move::position(from_pos).to_position(to_pos),
-                        )
+                        .command(mpd_client::commands::Move::position(from_pos).to_position(to_pos))
                         .await
                     {
                         eprintln!("Error moving song down in queue: {}", e);
@@ -259,14 +255,11 @@ impl App {
                                 library.artists.get(selected_artist_index)
                         {
                             // Compute display list to get total count
-                            let (display_items, _album_indices) = compute_album_display_list(
-                                selected_artist,
-                                &self.expanded_albums,
-                            );
+                            let (display_items, _album_indices) =
+                                compute_album_display_list(selected_artist, &self.expanded_albums);
 
                             if !display_items.is_empty() {
-                                let current =
-                                    self.album_display_list_state.selected().unwrap_or(0);
+                                let current = self.album_display_list_state.selected().unwrap_or(0);
                                 if current > 0 {
                                     self.album_display_list_state.select(Some(current - 1));
                                 } else {
@@ -281,7 +274,8 @@ impl App {
                                 } else {
                                     display_items.len().saturating_sub(1)
                                 };
-                                if let Some(DisplayItem::Album(_)) = display_items.get(wrapped_index)
+                                if let Some(DisplayItem::Album(_)) =
+                                    display_items.get(wrapped_index)
                                 {
                                     // Find which album this corresponds to
                                     let mut album_count = 0;
@@ -327,14 +321,11 @@ impl App {
                                 library.artists.get(selected_artist_index)
                         {
                             // Compute display list to get total count
-                            let (display_items, _album_indices) = compute_album_display_list(
-                                selected_artist,
-                                &self.expanded_albums,
-                            );
+                            let (display_items, _album_indices) =
+                                compute_album_display_list(selected_artist, &self.expanded_albums);
 
                             if !display_items.is_empty() {
-                                let current =
-                                    self.album_display_list_state.selected().unwrap_or(0);
+                                let current = self.album_display_list_state.selected().unwrap_or(0);
                                 if current < display_items.len().saturating_sub(1) {
                                     self.album_display_list_state.select(Some(current + 1));
                                 } else {
@@ -447,13 +438,10 @@ impl App {
                                 library.artists.get(selected_artist_index)
                         {
                             // Compute display list to get total count
-                            let (display_items, _album_indices) = compute_album_display_list(
-                                selected_artist,
-                                &self.expanded_albums,
-                            );
+                            let (display_items, _album_indices) =
+                                compute_album_display_list(selected_artist, &self.expanded_albums);
                             if !display_items.is_empty() {
-                                let current =
-                                    self.album_display_list_state.selected().unwrap_or(0);
+                                let current = self.album_display_list_state.selected().unwrap_or(0);
                                 let new_index = match action {
                                     MPDAction::ScrollUp => {
                                         let potential = current.saturating_sub(15);
@@ -526,9 +514,7 @@ impl App {
                         {
                             let new_index = match action {
                                 MPDAction::GoToTop => 0,
-                                MPDAction::GoToBottom => {
-                                    library.artists.len().saturating_sub(1)
-                                }
+                                MPDAction::GoToBottom => library.artists.len().saturating_sub(1),
                                 _ => return,
                             };
                             self.artist_list_state.select(Some(new_index));
@@ -543,16 +529,12 @@ impl App {
                             && let Some(selected_artist) =
                                 library.artists.get(selected_artist_index)
                         {
-                            let (display_items, _album_indices) = compute_album_display_list(
-                                selected_artist,
-                                &self.expanded_albums,
-                            );
+                            let (display_items, _album_indices) =
+                                compute_album_display_list(selected_artist, &self.expanded_albums);
                             if !display_items.is_empty() {
                                 let new_index = match action {
                                     MPDAction::GoToTop => 0,
-                                    MPDAction::GoToBottom => {
-                                        display_items.len().saturating_sub(1)
-                                    }
+                                    MPDAction::GoToBottom => display_items.len().saturating_sub(1),
                                     _ => return,
                                 };
                                 self.album_display_list_state.select(Some(new_index));
@@ -640,9 +622,7 @@ impl App {
                 }
             }
             // Start playback if queue was empty
-            if queue_was_empty
-                && let Err(e) = client.command(commands::Play::current()).await
-            {
+            if queue_was_empty && let Err(e) = client.command(commands::Play::current()).await {
                 eprintln!("Error starting playback: {}", e);
             }
         }
