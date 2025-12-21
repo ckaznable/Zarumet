@@ -79,7 +79,8 @@ impl EventHandlers for App {
                                 && let Some(ref song) = self.current_song
                                 && let Some(song_rate) = song.sample_rate()
                             {
-                                if let Ok(supported_rates) = crate::pipewire::get_supported_rates()
+                                if let Some(supported_rates) =
+                                    crate::pipewire::get_supported_rates()
                                 {
                                     let target_rate = crate::config::resolve_bit_perfect_rate(
                                         song_rate,

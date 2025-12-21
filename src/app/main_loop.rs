@@ -360,7 +360,7 @@ fn handle_pipewire_state_change(
                 && let Some(song_rate) = current_sample_rate
             {
                 #[cfg(target_os = "linux")]
-                if let Ok(supported_rates) = crate::pipewire::get_supported_rates() {
+                if let Some(supported_rates) = crate::pipewire::get_supported_rates() {
                     let target_rate =
                         crate::config::resolve_bit_perfect_rate(song_rate, &supported_rates);
                     log::debug!(

@@ -13,7 +13,7 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::OnceLock;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 /// The metadata name used by PipeWire for global settings
 const SETTINGS_METADATA_NAME: &str = "settings";
@@ -21,20 +21,17 @@ const SETTINGS_METADATA_NAME: &str = "settings";
 /// Property key for forcing the clock rate
 const CLOCK_FORCE_RATE_KEY: &str = "clock.force-rate";
 
-/// Timeout for discovering PipeWire objects
-const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(2);
+/// Timeout for discovering PipeWire objects (reduced from 2s for faster startup)
+const DISCOVERY_TIMEOUT: Duration = Duration::from_millis(50);
 
-/// Timeout for sync operations
-const SYNC_TIMEOUT: Duration = Duration::from_millis(500);
+/// Timeout for sync operations (reduced for faster response)
+const SYNC_TIMEOUT: Duration = Duration::from_millis(25);
 
-/// Iteration step for the main loop
-const LOOP_ITERATION_STEP: Duration = Duration::from_millis(10);
+/// Iteration step for the main loop (reduced for faster polling)
+const LOOP_ITERATION_STEP: Duration = Duration::from_millis(5);
 
-/// Cache for supported sample rates to avoid repeated PipeWire queries
-static SUPPORTED_RATES_CACHE: OnceLock<(Vec<u32>, SystemTime)> = OnceLock::new();
-
-/// Cache validity duration (5 minutes)
-const CACHE_VALIDITY_DURATION: Duration = Duration::from_secs(300);
+/// Cache for supported sample rates - populated once on startup, valid for entire program lifetime
+static SUPPORTED_RATES_CACHE: OnceLock<Vec<u32>> = OnceLock::new();
 
 /// Forces PipeWire to use a specific sample rate via the settings metadata.
 ///
@@ -184,42 +181,25 @@ pub fn reset_sample_rate() -> Result<(), String> {
 /// Initialize the supported rates cache.
 /// Should be called once when the program starts.
 pub fn initialize_supported_rates() -> Result<Vec<u32>, String> {
-    get_supported_rates()
+    if let Some(rates) = SUPPORTED_RATES_CACHE.get() {
+        return Ok(rates.clone());
+    }
+
+    let rates = get_supported_rates_inner()?;
+    let _ = SUPPORTED_RATES_CACHE.set(rates.clone());
+    Ok(rates)
 }
 
-/// Gets the list of supported sample rates from PipeWire.
+/// Gets the list of supported sample rates from the cache.
 ///
-/// This function first checks the cache, and only queries PipeWire
-/// if the cache is empty or expired.
+/// This function only returns cached rates and never queries PipeWire.
+/// Must call initialize_supported_rates() first.
 ///
 /// # Returns
-/// * `Ok(Vec<u32>)` with the list of supported sample rates
-/// * `Err(String)` with an error message if something went wrong
-pub fn get_supported_rates() -> Result<Vec<u32>, String> {
-    // Check cache first
-    if let Some((rates, timestamp)) = SUPPORTED_RATES_CACHE.get() {
-        let now = SystemTime::now();
-        if now.duration_since(*timestamp).unwrap_or(Duration::MAX) < CACHE_VALIDITY_DURATION {
-            debug!("Using cached supported sample rates: {:?}", rates);
-            return Ok(rates.clone());
-        }
-    }
-
-    // Cache miss or expired, fetch from PipeWire
-    let result = get_supported_rates_inner();
-
-    match &result {
-        Ok(rates) => {
-            debug!("Found {} supported sample rates: {:?}", rates.len(), rates);
-            // Cache the result
-            let _ = SUPPORTED_RATES_CACHE.set((rates.clone(), SystemTime::now()));
-        }
-        Err(e) => {
-            warn!("Failed to get supported sample rates: {}", e);
-        }
-    }
-
-    result
+/// * `Some(Vec<u32>)` with the list of supported sample rates from cache
+/// * `None` if cache hasn't been initialized
+pub fn get_supported_rates() -> Option<Vec<u32>> {
+    SUPPORTED_RATES_CACHE.get().cloned()
 }
 
 fn get_supported_rates_inner() -> Result<Vec<u32>, String> {
@@ -243,6 +223,9 @@ fn get_supported_rates_inner() -> Result<Vec<u32>, String> {
     let registry = core
         .get_registry()
         .map_err(|e| format!("Failed to get PipeWire registry: {e}"))?;
+
+    // Start with common rates immediately - we'll discover more if available
+    let mut rates: Vec<u32> = vec![44100, 48000, 88200, 96000, 192000];
 
     // Store found sample rates
     let supported_rates: Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
@@ -275,30 +258,31 @@ fn get_supported_rates_inner() -> Result<Vec<u32>, String> {
         })
         .register();
 
-    // Run the loop to discover objects
+    // Run the loop to discover objects (with very short timeout)
     let start = std::time::Instant::now();
     while start.elapsed() < DISCOVERY_TIMEOUT {
         mainloop.loop_().iterate(LOOP_ITERATION_STEP);
     }
 
-    // If no rates found, fall back to common rates
-    let mut rates = supported_rates.borrow_mut();
-    if rates.is_empty() {
-        *rates = vec![
-            8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000, 352800,
-            384000,
-        ];
-        info!("Using default common sample rates as fallback");
-    } else {
-        // Sort and deduplicate the rates
-        rates.sort();
-        rates.dedup();
-        rates.extend_from_slice(&[44100, 48000, 88200, 96000, 176400, 192000]);
-        rates.sort();
-        rates.dedup();
+    // Always use common rates as base - this ensures we have something quickly
+    let discovered_rates = supported_rates.borrow_mut();
+
+    // If we found any additional rates, merge them
+    if !discovered_rates.is_empty() {
+        debug!(
+            "Discovered {} additional sample rates from PipeWire",
+            discovered_rates.len()
+        );
+
+        // Merge with our base rates and deduplicate
+        rates.extend(discovered_rates.iter().copied());
     }
 
-    Ok(rates.clone())
+    // Sort and deduplicate the rates
+    rates.sort();
+    rates.dedup();
+
+    Ok(rates)
 }
 
 /// Extract sample rates from a description string
