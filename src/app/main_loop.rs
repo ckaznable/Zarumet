@@ -7,7 +7,7 @@ use mpd_client::client::ConnectionEvent;
 use mpd_client::responses::PlayState;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UnixStream};
 use tokio::sync::mpsc;
 
 use super::App;
@@ -29,6 +29,30 @@ pub trait AppMainLoop {
         Self: Sized;
 }
 
+/// Connect to MPD via Unix socket or TCP based on address format
+async fn connect_to_mpd(
+    address: &str,
+) -> color_eyre::Result<(Client, mpd_client::client::ConnectionEvents)> {
+    let is_unix_socket = address.contains('/');
+
+    if is_unix_socket {
+        #[cfg(unix)]
+        {
+            let connection = UnixStream::connect(address).await?;
+            Ok(Client::connect(connection).await?)
+        }
+        #[cfg(not(unix))]
+        {
+            Err(color_eyre::eyre::eyre!(
+                "Unix sockets are not supported on this platform"
+            ))
+        }
+    } else {
+        let connection = TcpStream::connect(address).await?;
+        Ok(Client::connect(connection).await?)
+    }
+}
+
 impl AppMainLoop for App {
     /// Run the application's main loop.
     async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
@@ -39,7 +63,8 @@ impl AppMainLoop for App {
             "Attempting to connect to MPD at: {}",
             self.config.mpd.address
         );
-        let connection = TcpStream::connect(&self.config.mpd.address)
+
+        let (client, mut state_changes) = connect_to_mpd(&self.config.mpd.address)
             .await
             .inspect_err(|e| {
                 crate::logging::log_mpd_connection(
@@ -48,13 +73,6 @@ impl AppMainLoop for App {
                     Some(&e.to_string()),
                 );
             })?;
-        let (client, mut state_changes) = Client::connect(connection).await.inspect_err(|e| {
-            crate::logging::log_mpd_connection(
-                &self.config.mpd.address,
-                false,
-                Some(&e.to_string()),
-            );
-        })?;
 
         crate::logging::log_mpd_connection(&self.config.mpd.address, true, None);
 
