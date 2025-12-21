@@ -2,9 +2,9 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use mpd_client::Client;
 use mpd_client::client::ConnectionEvent;
 use mpd_client::responses::PlayState;
-use mpd_client::Client;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use tokio::net::TcpStream;
@@ -48,14 +48,13 @@ impl AppMainLoop for App {
                     Some(&e.to_string()),
                 );
             })?;
-        let (client, mut state_changes) =
-            Client::connect(connection).await.inspect_err(|e| {
-                crate::logging::log_mpd_connection(
-                    &self.config.mpd.address,
-                    false,
-                    Some(&e.to_string()),
-                );
-            })?;
+        let (client, mut state_changes) = Client::connect(connection).await.inspect_err(|e| {
+            crate::logging::log_mpd_connection(
+                &self.config.mpd.address,
+                false,
+                Some(&e.to_string()),
+            );
+        })?;
 
         crate::logging::log_mpd_connection(&self.config.mpd.address, true, None);
 
@@ -94,6 +93,8 @@ impl AppMainLoop for App {
         // Track playback state for PipeWire sample rate control
         #[allow(unused_variables)]
         let mut last_play_state: Option<PlayState> = None;
+        #[allow(unused_variables)]
+        let mut last_sample_rate: Option<u32> = None;
 
         // Channel for cover art loading results
         let (cover_tx, mut cover_rx) = mpsc::channel::<CoverArtMessage>(1);
@@ -108,7 +109,8 @@ impl AppMainLoop for App {
         let mut protocol = Protocol { image: None };
 
         // Progress update interval
-        let progress_interval = tokio::time::interval(Duration::from_millis(PROGRESS_UPDATE_INTERVAL_MS));
+        let progress_interval =
+            tokio::time::interval(Duration::from_millis(PROGRESS_UPDATE_INTERVAL_MS));
         tokio::pin!(progress_interval);
 
         log::info!("Entering event-driven main loop");
@@ -150,12 +152,12 @@ impl AppMainLoop for App {
                     // Check for keyboard events non-blocking
                     if crossterm::event::poll(Duration::from_millis(0))? {
                         self.handle_crossterm_events(&client).await?;
-                        
+
                         // If user action requires update, do it immediately
                         if self.force_update {
                             self.run_updates(&client).await?;
                             self.force_update = false;
-                            
+
                             // Check for song change after update
                             check_song_change(
                                 &mut current_song_file,
@@ -172,10 +174,10 @@ impl AppMainLoop for App {
                     match mpd_event {
                         Some(ConnectionEvent::SubsystemChange(subsystem)) => {
                             log::debug!("MPD subsystem change: {:?}", subsystem);
-                            
+
                             // Update state based on what changed
                             self.run_updates(&client).await?;
-                            
+
                             // Check for song change
                             check_song_change(
                                 &mut current_song_file,
@@ -183,7 +185,7 @@ impl AppMainLoop for App {
                                 &client,
                                 &cover_tx,
                             );
-                            
+
                             // Handle PipeWire sample rate changes
                             #[cfg(target_os = "linux")]
                             handle_pipewire_state_change(
@@ -192,6 +194,7 @@ impl AppMainLoop for App {
                                 &self.mpd_status,
                                 &self.current_song,
                                 &mut last_play_state,
+                                &mut last_sample_rate,
                             );
                         }
                         Some(ConnectionEvent::ConnectionClosed(err)) => {
@@ -219,7 +222,7 @@ impl AppMainLoop for App {
                                 }
                                 _ => None,
                             };
-                            
+
                             if let Some(ref mut song) = self.current_song {
                                 song.update_playback_info(Some(new_status.state), progress);
                                 song.update_time_info(new_status.elapsed, new_status.duration);
@@ -244,7 +247,7 @@ impl AppMainLoop for App {
                                     })
                                     .and_then(|reader| reader.decode().ok())
                                     .map(|dyn_img| picker.new_resize_protocol(dyn_img));
-                                
+
                                 log::debug!("Cover art loaded for {:?}", file_path);
                             }
                         }
@@ -259,11 +262,7 @@ impl AppMainLoop for App {
 }
 
 /// Spawn a background task to load cover art
-fn spawn_cover_art_loader(
-    client: &Client,
-    file_path: PathBuf,
-    tx: mpsc::Sender<CoverArtMessage>,
-) {
+fn spawn_cover_art_loader(client: &Client, file_path: PathBuf, tx: mpsc::Sender<CoverArtMessage>) {
     let client = client.clone();
     let file_path_clone = file_path.clone();
 
@@ -281,7 +280,9 @@ fn spawn_cover_art_loader(
         };
 
         // Send result back (ignore error if receiver dropped)
-        let _ = tx.send(CoverArtMessage::Loaded(data, file_path_clone)).await;
+        let _ = tx
+            .send(CoverArtMessage::Loaded(data, file_path_clone))
+            .await;
     });
 }
 
@@ -295,7 +296,11 @@ fn check_song_change(
     let new_song_file: Option<PathBuf> = current_song.as_ref().map(|song| song.file_path.clone());
 
     if new_song_file != *current_song_file {
-        log::debug!("Song changed: {:?} -> {:?}", current_song_file, new_song_file);
+        log::debug!(
+            "Song changed: {:?} -> {:?}",
+            current_song_file,
+            new_song_file
+        );
 
         // Start loading cover art in background
         if let Some(ref file_path) = new_song_file {
@@ -306,7 +311,7 @@ fn check_song_change(
     }
 }
 
-/// Handle PipeWire sample rate changes based on playback state
+/// Handle PipeWire sample rate changes based on playback state and song changes
 #[cfg(target_os = "linux")]
 fn handle_pipewire_state_change(
     config: &crate::config::Config,
@@ -314,31 +319,44 @@ fn handle_pipewire_state_change(
     mpd_status: &Option<mpd_client::responses::Status>,
     current_song: &Option<crate::song::SongInfo>,
     last_play_state: &mut Option<PlayState>,
+    last_sample_rate: &mut Option<u32>,
 ) {
     if !bit_perfect_enabled || !config.pipewire.is_available() {
         return;
     }
 
     let current_play_state = mpd_status.as_ref().map(|s| s.state);
+    let current_sample_rate = current_song.as_ref().and_then(|s| s.sample_rate());
 
-    if current_play_state != *last_play_state {
-        match current_play_state {
-            Some(PlayState::Playing) => {
-                // Started playing - set sample rate to match song
-                if let Some(song) = current_song
-                    && let Some(song_rate) = song.sample_rate()
-                {
-                    let target_rate = config.pipewire.resolve_rate(song_rate);
-                    let _ = crate::pipewire::set_sample_rate(target_rate);
-                }
-            }
-            Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
-                // Paused or stopped - reset to automatic rate
-                if *last_play_state == Some(PlayState::Playing) {
-                    let _ = crate::pipewire::reset_sample_rate();
-                }
+    match current_play_state {
+        Some(PlayState::Playing) => {
+            // Check if we need to update sample rate:
+            // 1. Just started playing (state changed)
+            // 2. Song changed while playing (sample rate changed)
+            let state_changed = current_play_state != *last_play_state;
+            let rate_changed = current_sample_rate != *last_sample_rate;
+
+            if (state_changed || rate_changed)
+                && let Some(song_rate) = current_sample_rate
+            {
+                let target_rate = config.pipewire.resolve_rate(song_rate);
+                log::debug!(
+                    "Setting PipeWire sample rate to {} (song rate: {})",
+                    target_rate,
+                    song_rate
+                );
+                let _ = crate::pipewire::set_sample_rate(target_rate);
             }
         }
-        *last_play_state = current_play_state;
+        Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
+            // Paused or stopped - reset to automatic rate
+            if *last_play_state == Some(PlayState::Playing) {
+                log::debug!("Resetting PipeWire sample rate (playback stopped)");
+                let _ = crate::pipewire::reset_sample_rate();
+            }
+        }
     }
+
+    *last_play_state = current_play_state;
+    *last_sample_rate = current_sample_rate;
 }

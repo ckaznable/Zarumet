@@ -1,6 +1,10 @@
 use crate::config::Config;
 use crate::logging::log_mpd_command;
-use mpd_client::{client::CommandError, commands, responses::{PlayState, Status}};
+use mpd_client::{
+    client::CommandError,
+    commands,
+    responses::{PlayState, Status},
+};
 use std::fmt;
 
 /// Actions that can be performed on MPD
@@ -144,7 +148,7 @@ impl MPDAction {
     }
 
     /// Execute the action on the MPD client
-    /// 
+    ///
     /// Uses the cached status when available to avoid extra MPD round-trips.
     pub async fn execute(
         &self,
@@ -302,9 +306,7 @@ impl MPDAction {
                 } else {
                     client.command(commands::Status).await?.consume
                 };
-                client
-                    .command(commands::SetConsume(!consume))
-                    .await?;
+                client.command(commands::SetConsume(!consume)).await?;
             }
             MPDAction::QueueUp
             | MPDAction::QueueDown

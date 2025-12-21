@@ -6,12 +6,8 @@
 use crate::logging::log_pipewire_operation;
 use log::{debug, info, warn};
 use pipewire::{
-    context::ContextBox,
-    main_loop::MainLoopBox,
-    metadata::Metadata,
-    properties::PropertiesBox,
-    registry::GlobalObject,
-    types::ObjectType,
+    context::ContextBox, main_loop::MainLoopBox, metadata::Metadata, properties::PropertiesBox,
+    registry::GlobalObject, types::ObjectType,
 };
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -76,8 +72,8 @@ fn set_sample_rate_inner(rate: u32) -> Result<(), String> {
     pipewire::init();
 
     // Create the main loop
-    let mainloop = MainLoopBox::new(None)
-        .map_err(|e| format!("Failed to create PipeWire MainLoop: {e}"))?;
+    let mainloop =
+        MainLoopBox::new(None).map_err(|e| format!("Failed to create PipeWire MainLoop: {e}"))?;
 
     // Create context from the main loop
     let context = ContextBox::new(mainloop.loop_(), None)

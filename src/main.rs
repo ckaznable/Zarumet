@@ -2,11 +2,11 @@
 mod app;
 mod binds;
 mod config;
+mod logging;
 #[cfg(target_os = "linux")]
 mod pipewire;
 mod song;
 mod ui;
-mod logging;
 
 use app::cli::Args;
 use app::{
@@ -14,8 +14,8 @@ use app::{
     main_loop::AppMainLoop,
     terminal::{init_terminal, restore_terminal},
 };
-use config::Config;
 use clap::Parser;
+use config::Config;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -34,7 +34,7 @@ async fn main() -> color_eyre::Result<()> {
 
     // Load config first for logger initialization
     let mut config = Config::load(args.config.clone())?;
-    
+
     if let Some(ref addr) = args.address {
         config.mpd.address = addr.clone();
     }
@@ -56,7 +56,7 @@ async fn main() -> color_eyre::Result<()> {
 
     // Create app now that logger is initialized
     let app = App::new_with_config(config, args.clone())?;
-    
+
     // Run application
     let result = app.run(terminal).await;
 
