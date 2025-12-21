@@ -98,6 +98,21 @@ impl KeyBinds {
                     }
                 }
             }
+            MenuMode::Albums => {
+                // Reuse tracks_map for Albums mode with panel-specific logic
+                if let Some(action) = self.tracks_map.get(&key_tuple) {
+                    match (action, panel_focus) {
+                        (MPDAction::SwitchPanelRight, PanelFocus::AlbumList) => {
+                            return Some(MPDAction::SwitchPanelRight);
+                        }
+                        (MPDAction::SwitchPanelRight, PanelFocus::AlbumTracks) => {
+                            // Already at rightmost panel, no action
+                            return None;
+                        }
+                        _ => return Some(action.clone()),
+                    }
+                }
+            }
         }
 
         // Check if this key could start a sequential binding

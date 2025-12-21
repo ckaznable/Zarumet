@@ -207,6 +207,8 @@ pub struct BindsConfig {
     pub switch_to_queue_menu: Vec<String>,
     #[serde(default = "BindsConfig::default_switch_to_tracks")]
     pub switch_to_tracks: Vec<String>,
+    #[serde(default = "BindsConfig::default_switch_to_albums")]
+    pub switch_to_albums: Vec<String>,
     #[serde(default = "BindsConfig::default_seek_forward")]
     pub seek_forward: Vec<String>,
     #[serde(default = "BindsConfig::default_seek_backward")]
@@ -603,6 +605,9 @@ impl BindsConfig {
     fn default_switch_to_tracks() -> Vec<String> {
         vec!["2".to_string()]
     }
+    fn default_switch_to_albums() -> Vec<String> {
+        vec!["3".to_string()]
+    }
     fn default_seek_forward() -> Vec<String> {
         vec!["shift-l".to_string(), "shift-right".to_string()]
     }
@@ -938,6 +943,12 @@ impl BindsConfig {
             sequential_bindings,
         );
         self.add_enhanced_binding_for_action(
+            &self.switch_to_albums,
+            crate::app::mpd_handler::MPDAction::SwitchToAlbums,
+            single_map,
+            sequential_bindings,
+        );
+        self.add_enhanced_binding_for_action(
             &self.seek_forward,
             crate::app::mpd_handler::MPDAction::SeekForward,
             single_map,
@@ -1152,6 +1163,7 @@ impl Default for BindsConfig {
             refresh: Self::default_refresh(),
             switch_to_queue_menu: Self::default_switch_to_queue_menu(),
             switch_to_tracks: Self::default_switch_to_tracks(),
+            switch_to_albums: Self::default_switch_to_albums(),
             seek_forward: Self::default_seek_forward(),
             seek_backward: Self::default_seek_backward(),
             play_selected: Self::default_play_selected(),

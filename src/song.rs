@@ -142,6 +142,9 @@ pub struct Artist {
 #[derive(Debug, Clone)]
 pub struct Library {
     pub artists: Vec<Artist>,
+    /// Flattened list of all albums sorted alphabetically by album name.
+    /// Each entry is (artist_name, Album).
+    pub all_albums: Vec<(String, Album)>,
 }
 
 impl Library {
@@ -218,7 +221,20 @@ impl Library {
             total_albums
         );
 
-        Ok(Library { artists })
+        // Build flattened all_albums list sorted alphabetically by album name
+        let mut all_albums: Vec<(String, Album)> = Vec::new();
+        for artist in &artists {
+            for album in &artist.albums {
+                all_albums.push((artist.name.clone(), album.clone()));
+            }
+        }
+        // Sort alphabetically by album name (case-insensitive), then by artist name for stability
+        all_albums.sort_by(|a, b| {
+            a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase())
+                .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
+        });
+
+        Ok(Library { artists, all_albums })
     }
 
     /// Validate MPD connection with a simple ping

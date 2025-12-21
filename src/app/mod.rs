@@ -37,6 +37,10 @@ pub struct App {
     pub menu_mode: MenuMode,
     /// Current panel focus in Tracks mode
     pub panel_focus: PanelFocus,
+    /// Cached panel focus for Tracks mode (restored when switching back)
+    pub tracks_panel_focus: PanelFocus,
+    /// Cached panel focus for Albums mode (restored when switching back)
+    pub albums_panel_focus: PanelFocus,
     /// Music library
     pub library: Option<Library>,
     /// Expanded albums (tracks which albums are currently expanded)

@@ -41,6 +41,9 @@ impl Navigation for App {
                     MenuMode::Tracks => {
                         // Navigation is now handled by NavigateUp/Down actions based on panel focus
                     }
+                    MenuMode::Albums => {
+                        // Navigation is handled by NavigateUp/Down actions based on panel focus
+                    }
                 }
             }
             MPDAction::QueueDown => {
@@ -59,6 +62,9 @@ impl Navigation for App {
                     }
                     MenuMode::Tracks => {
                         // Navigation is now handled by NavigateUp/Down actions based on panel focus
+                    }
+                    MenuMode::Albums => {
+                        // Navigation is handled by NavigateUp/Down actions based on panel focus
                     }
                 }
             }
@@ -227,43 +233,131 @@ impl Navigation for App {
                 }
             }
             MPDAction::SwitchToQueueMenu => {
+                // Save current panel focus before leaving
+                match self.menu_mode {
+                    MenuMode::Tracks => self.tracks_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Albums => self.albums_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Queue => {}
+                }
                 self.menu_mode = MenuMode::Queue;
+                // Queue mode doesn't use panel focus
             }
             MPDAction::SwitchToTracks => {
+                // Save current panel focus before leaving
+                match self.menu_mode {
+                    MenuMode::Tracks => {} // Already in Tracks mode
+                    MenuMode::Albums => self.albums_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Queue => {}
+                }
                 self.menu_mode = MenuMode::Tracks;
+                // Restore cached panel focus for Tracks mode
+                self.panel_focus = self.tracks_panel_focus.clone();
+            }
+            MPDAction::SwitchToAlbums => {
+                // Save current panel focus before leaving
+                match self.menu_mode {
+                    MenuMode::Tracks => self.tracks_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Albums => {} // Already in Albums mode
+                    MenuMode::Queue => {}
+                }
+                self.menu_mode = MenuMode::Albums;
+                // Restore cached panel focus for Albums mode
+                self.panel_focus = self.albums_panel_focus.clone();
+                // Initialize album selection if needed
+                if let Some(ref library) = self.library
+                    && !library.all_albums.is_empty()
+                    && self.artist_list_state.selected().is_none()
+                {
+                    self.artist_list_state.select(Some(0));
+                }
             }
             MPDAction::SwitchPanelLeft => {
-                match self.panel_focus {
-                    PanelFocus::Artists => {
-                        // Already at artists panel, can't go left
+                match self.menu_mode {
+                    MenuMode::Tracks => {
+                        match self.panel_focus {
+                            PanelFocus::Artists => {
+                                // Already at leftmost panel
+                            }
+                            PanelFocus::Albums => {
+                                self.panel_focus = PanelFocus::Artists;
+                                // Clear album selection when switching to artists panel
+                                self.album_list_state.select(None);
+                                self.album_display_list_state.select(None);
+                            }
+                            _ => {
+                                // Invalid panel focus for Tracks mode, reset to Artists
+                                self.panel_focus = PanelFocus::Artists;
+                            }
+                        }
                     }
-                    PanelFocus::Albums => {
-                        self.panel_focus = PanelFocus::Artists;
-                        // Clear album selection when switching to artists panel
-                        self.album_list_state.select(None);
-                        self.album_display_list_state.select(None);
+                    MenuMode::Albums => {
+                        match self.panel_focus {
+                            PanelFocus::AlbumList => {
+                                // Already at leftmost panel
+                            }
+                            PanelFocus::AlbumTracks => {
+                                self.panel_focus = PanelFocus::AlbumList;
+                            }
+                            _ => {
+                                // Invalid panel focus for Albums mode, reset to AlbumList
+                                self.panel_focus = PanelFocus::AlbumList;
+                            }
+                        }
+                    }
+                    MenuMode::Queue => {
+                        // Queue mode doesn't have panels
                     }
                 }
             }
             MPDAction::SwitchPanelRight => {
-                match self.panel_focus {
-                    PanelFocus::Artists => {
-                        self.panel_focus = PanelFocus::Albums;
-                        // Initialize album selection when switching to albums panel
-                        if let Some(ref library) = self.library
-                            && let Some(selected_artist_index) = self.artist_list_state.selected()
-                            && let Some(selected_artist) =
-                                library.artists.get(selected_artist_index)
-                        {
-                            // Initialize display list state
-                            self.album_display_list_state.select(Some(0));
-                            if !selected_artist.albums.is_empty() {
-                                self.album_list_state.select(Some(0));
+                match self.menu_mode {
+                    MenuMode::Tracks => {
+                        match self.panel_focus {
+                            PanelFocus::Artists => {
+                                self.panel_focus = PanelFocus::Albums;
+                                // Initialize album selection when switching to albums panel
+                                if let Some(ref library) = self.library
+                                    && let Some(selected_artist_index) = self.artist_list_state.selected()
+                                    && let Some(selected_artist) =
+                                        library.artists.get(selected_artist_index)
+                                {
+                                    // Initialize display list state
+                                    self.album_display_list_state.select(Some(0));
+                                    if !selected_artist.albums.is_empty() {
+                                        self.album_list_state.select(Some(0));
+                                    }
+                                }
+                            }
+                            PanelFocus::Albums => {
+                                // Already at rightmost panel
+                            }
+                            _ => {
+                                // Invalid panel focus for Tracks mode, reset to Artists
+                                self.panel_focus = PanelFocus::Artists;
                             }
                         }
                     }
-                    PanelFocus::Albums => {
-                        // Already at albums panel, can't go right
+                    MenuMode::Albums => {
+                        match self.panel_focus {
+                            PanelFocus::AlbumList => {
+                                self.panel_focus = PanelFocus::AlbumTracks;
+                                // Initialize track selection when switching to tracks panel
+                                if self.album_display_list_state.selected().is_none() {
+                                    self.album_display_list_state.select(Some(0));
+                                }
+                            }
+                            PanelFocus::AlbumTracks => {
+                                // Already at rightmost panel
+                                self.panel_focus = PanelFocus::AlbumList;
+                            }
+                            _ => {
+                                // Invalid panel focus for Albums mode, reset to AlbumList
+                                self.panel_focus = PanelFocus::AlbumList;
+                            }
+                        }
+                    }
+                    MenuMode::Queue => {
+                        // Queue mode doesn't have panels
                     }
                 }
             }
@@ -280,17 +374,61 @@ impl Navigation for App {
                 self.handle_add_to_queue(client).await?;
             }
             MPDAction::CycleModeLeft => {
-                // Cycle modes left: Queue -> Tracks -> Queue
-                self.menu_mode = match self.menu_mode {
-                    MenuMode::Queue => MenuMode::Tracks,
-                    MenuMode::Tracks => MenuMode::Queue,
+                // Cycle modes left: Queue -> Albums -> Tracks -> Queue
+                // Save current panel focus before leaving
+                match self.menu_mode {
+                    MenuMode::Tracks => self.tracks_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Albums => self.albums_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Queue => {}
+                }
+                match self.menu_mode {
+                    MenuMode::Queue => {
+                        self.menu_mode = MenuMode::Albums;
+                        self.panel_focus = self.albums_panel_focus.clone();
+                        // Initialize album selection if needed
+                        if let Some(ref library) = self.library
+                            && !library.all_albums.is_empty()
+                            && self.artist_list_state.selected().is_none()
+                        {
+                            self.artist_list_state.select(Some(0));
+                        }
+                    }
+                    MenuMode::Tracks => {
+                        self.menu_mode = MenuMode::Queue;
+                    }
+                    MenuMode::Albums => {
+                        self.menu_mode = MenuMode::Tracks;
+                        self.panel_focus = self.tracks_panel_focus.clone();
+                    }
                 };
             }
             MPDAction::CycleModeRight => {
-                // Cycle modes right: Queue -> Tracks -> Queue
-                self.menu_mode = match self.menu_mode {
-                    MenuMode::Queue => MenuMode::Tracks,
-                    MenuMode::Tracks => MenuMode::Queue,
+                // Cycle modes right: Queue -> Tracks -> Albums -> Queue
+                // Save current panel focus before leaving
+                match self.menu_mode {
+                    MenuMode::Tracks => self.tracks_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Albums => self.albums_panel_focus = self.panel_focus.clone(),
+                    MenuMode::Queue => {}
+                }
+                match self.menu_mode {
+                    MenuMode::Queue => {
+                        self.menu_mode = MenuMode::Tracks;
+                        self.panel_focus = self.tracks_panel_focus.clone();
+                    }
+                    MenuMode::Tracks => {
+                        self.menu_mode = MenuMode::Albums;
+                        self.panel_focus = self.albums_panel_focus.clone();
+                        // Initialize album selection if needed
+                        if let Some(ref library) = self.library
+                            && !library.all_albums.is_empty()
+                            && self.artist_list_state.selected().is_none()
+                        {
+                            self.artist_list_state.select(Some(0));
+                        }
+                    }
+                    MenuMode::Albums => {
+                        self.menu_mode = MenuMode::Queue;
+                    }
                 };
             }
             MPDAction::ScrollUp | MPDAction::ScrollDown => {
@@ -315,126 +453,230 @@ impl App {
     async fn handle_panel_navigation(&mut self, action: MPDAction) {
         match action {
             MPDAction::NavigateUp => {
-                match self.panel_focus {
-                    PanelFocus::Artists => {
-                        // Navigate artists list
-                        if let Some(ref library) = self.library
-                            && !library.artists.is_empty()
-                        {
-                            let current = self.artist_list_state.selected().unwrap_or(0);
-                            if current > 0 {
-                                self.artist_list_state.select(Some(current - 1));
-                            } else {
-                                // Wrap around to the bottom
-                                self.artist_list_state
-                                    .select(Some(library.artists.len().saturating_sub(1)));
-                            }
-                            // Clear album selection when navigating artists
-                            self.album_list_state.select(None);
-                            self.album_display_list_state.select(None);
-                        }
+                match self.menu_mode {
+                    MenuMode::Queue => {
+                        // Queue navigation is handled elsewhere
                     }
-                    PanelFocus::Albums => {
-                        // Navigate albums list using display list state
-                        if let (Some(library), Some(selected_artist_index)) =
-                            (&self.library, self.artist_list_state.selected())
-                            && let Some(selected_artist) =
-                                library.artists.get(selected_artist_index)
-                        {
-                            // Compute display list to get total count
-                            let (display_items, _album_indices) =
-                                compute_album_display_list(selected_artist, &self.expanded_albums);
-
-                            if !display_items.is_empty() {
-                                let current = self.album_display_list_state.selected().unwrap_or(0);
-                                if current > 0 {
-                                    self.album_display_list_state.select(Some(current - 1));
-                                } else {
-                                    // Wrap around to bottom
-                                    self.album_display_list_state
-                                        .select(Some(display_items.len().saturating_sub(1)));
-                                }
-
-                                // Update the legacy album_list_state to point to the current album if on album
-                                let wrapped_index = if current > 0 {
-                                    current - 1
-                                } else {
-                                    display_items.len().saturating_sub(1)
-                                };
-                                if let Some(DisplayItem::Album(_)) =
-                                    display_items.get(wrapped_index)
+                    MenuMode::Tracks => {
+                        match self.panel_focus {
+                            PanelFocus::Artists => {
+                                // Navigate artists list
+                                if let Some(ref library) = self.library
+                                    && !library.artists.is_empty()
                                 {
-                                    // Find which album this corresponds to
-                                    let mut album_count = 0;
-                                    for (i, item) in display_items.iter().enumerate() {
-                                        if matches!(item, DisplayItem::Album(_)) {
-                                            if i == wrapped_index {
-                                                self.album_list_state.select(Some(album_count));
-                                                break;
+                                    let current = self.artist_list_state.selected().unwrap_or(0);
+                                    if current > 0 {
+                                        self.artist_list_state.select(Some(current - 1));
+                                    } else {
+                                        // Wrap around to the bottom
+                                        self.artist_list_state
+                                            .select(Some(library.artists.len().saturating_sub(1)));
+                                    }
+                                    // Clear album selection when navigating artists
+                                    self.album_list_state.select(None);
+                                    self.album_display_list_state.select(None);
+                                }
+                            }
+                            PanelFocus::Albums => {
+                                // Navigate albums list using display list state
+                                if let (Some(library), Some(selected_artist_index)) =
+                                    (&self.library, self.artist_list_state.selected())
+                                    && let Some(selected_artist) =
+                                        library.artists.get(selected_artist_index)
+                                {
+                                    // Compute display list to get total count
+                                    let (display_items, _album_indices) =
+                                        compute_album_display_list(selected_artist, &self.expanded_albums);
+
+                                    if !display_items.is_empty() {
+                                        let current = self.album_display_list_state.selected().unwrap_or(0);
+                                        if current > 0 {
+                                            self.album_display_list_state.select(Some(current - 1));
+                                        } else {
+                                            // Wrap around to bottom
+                                            self.album_display_list_state
+                                                .select(Some(display_items.len().saturating_sub(1)));
+                                        }
+
+                                        // Update the legacy album_list_state to point to the current album if on album
+                                        let wrapped_index = if current > 0 {
+                                            current - 1
+                                        } else {
+                                            display_items.len().saturating_sub(1)
+                                        };
+                                        if let Some(DisplayItem::Album(_)) =
+                                            display_items.get(wrapped_index)
+                                        {
+                                            // Find which album this corresponds to
+                                            let mut album_count = 0;
+                                            for (i, item) in display_items.iter().enumerate() {
+                                                if matches!(item, DisplayItem::Album(_)) {
+                                                    if i == wrapped_index {
+                                                        self.album_list_state.select(Some(album_count));
+                                                        break;
+                                                    }
+                                                    album_count += 1;
+                                                }
                                             }
-                                            album_count += 1;
                                         }
                                     }
                                 }
+                            }
+                            _ => {
+                                // Invalid panel focus for Tracks mode, reset
+                                self.panel_focus = PanelFocus::Artists;
+                            }
+                        }
+                    }
+                    MenuMode::Albums => {
+                        match self.panel_focus {
+                            PanelFocus::AlbumList => {
+                                // Navigate all_albums list in Albums mode
+                                if let Some(ref library) = self.library
+                                    && !library.all_albums.is_empty()
+                                {
+                                    let current = self.artist_list_state.selected().unwrap_or(0);
+                                    if current > 0 {
+                                        self.artist_list_state.select(Some(current - 1));
+                                    } else {
+                                        // Wrap around to the bottom
+                                        self.artist_list_state
+                                            .select(Some(library.all_albums.len().saturating_sub(1)));
+                                    }
+                                    // Clear track selection when navigating albums
+                                    self.album_display_list_state.select(Some(0));
+                                }
+                            }
+                            PanelFocus::AlbumTracks => {
+                                // Navigate tracks in selected album
+                                if let Some(ref library) = self.library
+                                    && let Some(selected_album_index) = self.artist_list_state.selected()
+                                    && let Some((_, album)) = library.all_albums.get(selected_album_index)
+                                    && !album.tracks.is_empty()
+                                {
+                                    let current = self.album_display_list_state.selected().unwrap_or(0);
+                                    if current > 0 {
+                                        self.album_display_list_state.select(Some(current - 1));
+                                    } else {
+                                        // Wrap around to the bottom
+                                        self.album_display_list_state
+                                            .select(Some(album.tracks.len().saturating_sub(1)));
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Invalid panel focus for Albums mode, reset
+                                self.panel_focus = PanelFocus::AlbumList;
                             }
                         }
                     }
                 }
             }
             MPDAction::NavigateDown => {
-                match self.panel_focus {
-                    PanelFocus::Artists => {
-                        // Navigate artists list
-                        if let Some(ref library) = self.library
-                            && !library.artists.is_empty()
-                        {
-                            let current = self.artist_list_state.selected().unwrap_or(0);
-                            if current < library.artists.len().saturating_sub(1) {
-                                self.artist_list_state.select(Some(current + 1));
-                            } else {
-                                // Wrap around to the top
-                                self.artist_list_state.select(Some(0));
-                            }
-                            // Clear album selection when navigating artists
-                            self.album_list_state.select(None);
-                            self.album_display_list_state.select(None);
-                        }
+                match self.menu_mode {
+                    MenuMode::Queue => {
+                        // Queue navigation is handled elsewhere
                     }
-                    PanelFocus::Albums => {
-                        // Navigate albums list using display list state
-                        if let (Some(library), Some(selected_artist_index)) =
-                            (&self.library, self.artist_list_state.selected())
-                            && let Some(selected_artist) =
-                                library.artists.get(selected_artist_index)
-                        {
-                            // Compute display list to get total count
-                            let (display_items, _album_indices) =
-                                compute_album_display_list(selected_artist, &self.expanded_albums);
-
-                            if !display_items.is_empty() {
-                                let current = self.album_display_list_state.selected().unwrap_or(0);
-                                if current < display_items.len().saturating_sub(1) {
-                                    self.album_display_list_state.select(Some(current + 1));
-                                } else {
-                                    // Wrap around to top
-                                    self.album_display_list_state.select(Some(0));
-                                }
-
-                                // Update legacy album_list_state to point to current album if on album
-                                if let Some(DisplayItem::Album(_)) = display_items.get(current + 1)
+                    MenuMode::Tracks => {
+                        match self.panel_focus {
+                            PanelFocus::Artists => {
+                                // Navigate artists list
+                                if let Some(ref library) = self.library
+                                    && !library.artists.is_empty()
                                 {
-                                    // Find which album this corresponds to
-                                    let mut album_count = 0;
-                                    for (i, item) in display_items.iter().enumerate() {
-                                        if matches!(item, DisplayItem::Album(_)) {
-                                            if i == current + 1 {
-                                                self.album_list_state.select(Some(album_count));
-                                                break;
+                                    let current = self.artist_list_state.selected().unwrap_or(0);
+                                    if current < library.artists.len().saturating_sub(1) {
+                                        self.artist_list_state.select(Some(current + 1));
+                                    } else {
+                                        // Wrap around to the top
+                                        self.artist_list_state.select(Some(0));
+                                    }
+                                    // Clear album selection when navigating artists
+                                    self.album_list_state.select(None);
+                                    self.album_display_list_state.select(None);
+                                }
+                            }
+                            PanelFocus::Albums => {
+                                // Navigate albums list using display list state
+                                if let (Some(library), Some(selected_artist_index)) =
+                                    (&self.library, self.artist_list_state.selected())
+                                    && let Some(selected_artist) =
+                                        library.artists.get(selected_artist_index)
+                                {
+                                    // Compute display list to get total count
+                                    let (display_items, _album_indices) =
+                                        compute_album_display_list(selected_artist, &self.expanded_albums);
+
+                                    if !display_items.is_empty() {
+                                        let current = self.album_display_list_state.selected().unwrap_or(0);
+                                        if current < display_items.len().saturating_sub(1) {
+                                            self.album_display_list_state.select(Some(current + 1));
+                                        } else {
+                                            // Wrap around to top
+                                            self.album_display_list_state.select(Some(0));
+                                        }
+
+                                        // Update legacy album_list_state to point to current album if on album
+                                        if let Some(DisplayItem::Album(_)) = display_items.get(current + 1)
+                                        {
+                                            // Find which album this corresponds to
+                                            let mut album_count = 0;
+                                            for (i, item) in display_items.iter().enumerate() {
+                                                if matches!(item, DisplayItem::Album(_)) {
+                                                    if i == current + 1 {
+                                                        self.album_list_state.select(Some(album_count));
+                                                        break;
+                                                    }
+                                                    album_count += 1;
+                                                }
                                             }
-                                            album_count += 1;
                                         }
                                     }
                                 }
+                            }
+                            _ => {
+                                // Invalid panel focus for Tracks mode, reset
+                                self.panel_focus = PanelFocus::Artists;
+                            }
+                        }
+                    }
+                    MenuMode::Albums => {
+                        match self.panel_focus {
+                            PanelFocus::AlbumList => {
+                                // Navigate all_albums list in Albums mode
+                                if let Some(ref library) = self.library
+                                    && !library.all_albums.is_empty()
+                                {
+                                    let current = self.artist_list_state.selected().unwrap_or(0);
+                                    if current < library.all_albums.len().saturating_sub(1) {
+                                        self.artist_list_state.select(Some(current + 1));
+                                    } else {
+                                        // Wrap around to the top
+                                        self.artist_list_state.select(Some(0));
+                                    }
+                                    // Reset track selection when navigating albums
+                                    self.album_display_list_state.select(Some(0));
+                                }
+                            }
+                            PanelFocus::AlbumTracks => {
+                                // Navigate tracks in selected album
+                                if let Some(ref library) = self.library
+                                    && let Some(selected_album_index) = self.artist_list_state.selected()
+                                    && let Some((_, album)) = library.all_albums.get(selected_album_index)
+                                    && !album.tracks.is_empty()
+                                {
+                                    let current = self.album_display_list_state.selected().unwrap_or(0);
+                                    if current < album.tracks.len().saturating_sub(1) {
+                                        self.album_display_list_state.select(Some(current + 1));
+                                    } else {
+                                        // Wrap around to the top
+                                        self.album_display_list_state.select(Some(0));
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Invalid panel focus for Albums mode, reset
+                                self.panel_focus = PanelFocus::AlbumList;
                             }
                         }
                     }
@@ -574,6 +816,84 @@ impl App {
                             }
                         }
                     }
+                    PanelFocus::AlbumList | PanelFocus::AlbumTracks => {
+                        // Not applicable in Tracks mode
+                    }
+                }
+            }
+            MenuMode::Albums => {
+                // Handle scrolling based on current panel focus in Albums mode
+                match self.panel_focus {
+                    PanelFocus::AlbumList => {
+                        if let Some(ref library) = self.library
+                            && !library.all_albums.is_empty()
+                        {
+                            let current = self.artist_list_state.selected().unwrap_or(0);
+                            let new_index = match action {
+                                MPDAction::ScrollUp => {
+                                    let potential = current.saturating_sub(15);
+                                    if potential == 0 && current == 0 {
+                                        library.all_albums.len().saturating_sub(1)
+                                    } else {
+                                        potential
+                                    }
+                                }
+                                MPDAction::ScrollDown => {
+                                    let potential = std::cmp::min(
+                                        current + 15,
+                                        library.all_albums.len().saturating_sub(1),
+                                    );
+                                    if potential == library.all_albums.len().saturating_sub(1)
+                                        && current == library.all_albums.len().saturating_sub(1)
+                                    {
+                                        0
+                                    } else {
+                                        potential
+                                    }
+                                }
+                                _ => current,
+                            };
+                            self.artist_list_state.select(Some(new_index));
+                            self.album_display_list_state.select(Some(0));
+                        }
+                    }
+                    PanelFocus::AlbumTracks => {
+                        if let Some(ref library) = self.library
+                            && let Some(selected_album_index) = self.artist_list_state.selected()
+                            && let Some((_, album)) = library.all_albums.get(selected_album_index)
+                            && !album.tracks.is_empty()
+                        {
+                            let current = self.album_display_list_state.selected().unwrap_or(0);
+                            let new_index = match action {
+                                MPDAction::ScrollUp => {
+                                    let potential = current.saturating_sub(15);
+                                    if potential == 0 && current == 0 {
+                                        album.tracks.len().saturating_sub(1)
+                                    } else {
+                                        potential
+                                    }
+                                }
+                                MPDAction::ScrollDown => {
+                                    let potential = std::cmp::min(
+                                        current + 15,
+                                        album.tracks.len().saturating_sub(1),
+                                    );
+                                    if potential == album.tracks.len().saturating_sub(1)
+                                        && current == album.tracks.len().saturating_sub(1)
+                                    {
+                                        0
+                                    } else {
+                                        potential
+                                    }
+                                }
+                                _ => current,
+                            };
+                            self.album_display_list_state.select(Some(new_index));
+                        }
+                    }
+                    PanelFocus::Artists | PanelFocus::Albums => {
+                        // Not applicable in Albums mode
+                    }
                 }
             }
         }
@@ -641,6 +961,43 @@ impl App {
                                 }
                             }
                         }
+                    }
+                    PanelFocus::AlbumList | PanelFocus::AlbumTracks => {
+                        // Not applicable in Tracks mode
+                    }
+                }
+            }
+            MenuMode::Albums => {
+                match self.panel_focus {
+                    PanelFocus::AlbumList => {
+                        if let Some(ref library) = self.library
+                            && !library.all_albums.is_empty()
+                        {
+                            let new_index = match action {
+                                MPDAction::GoToTop => 0,
+                                MPDAction::GoToBottom => library.all_albums.len().saturating_sub(1),
+                                _ => return,
+                            };
+                            self.artist_list_state.select(Some(new_index));
+                            self.album_display_list_state.select(Some(0));
+                        }
+                    }
+                    PanelFocus::AlbumTracks => {
+                        if let Some(ref library) = self.library
+                            && let Some(selected_album_index) = self.artist_list_state.selected()
+                            && let Some((_, album)) = library.all_albums.get(selected_album_index)
+                            && !album.tracks.is_empty()
+                        {
+                            let new_index = match action {
+                                MPDAction::GoToTop => 0,
+                                MPDAction::GoToBottom => album.tracks.len().saturating_sub(1),
+                                _ => return,
+                            };
+                            self.album_display_list_state.select(Some(new_index));
+                        }
+                    }
+                    PanelFocus::Artists | PanelFocus::Albums => {
+                        // Not applicable in Albums mode
                     }
                 }
             }

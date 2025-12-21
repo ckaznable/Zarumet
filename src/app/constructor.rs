@@ -110,6 +110,8 @@ impl App {
             config,
             menu_mode: MenuMode::Queue,       // Start with queue menu
             panel_focus: PanelFocus::Artists, // Start with artists panel focused
+            tracks_panel_focus: PanelFocus::Artists, // Default for Tracks mode
+            albums_panel_focus: PanelFocus::AlbumList, // Default for Albums mode
             library: None,
             expanded_albums: std::collections::HashSet::new(),
             mpd_status: None,

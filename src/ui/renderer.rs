@@ -184,6 +184,29 @@ pub fn render(
                 bit_perfect_enabled,
             );
         }
+        MenuMode::Albums => {
+            crate::ui::albums_renderer::render_albums_mode(
+                frame,
+                protocol,
+                area,
+                &format,
+                current_song,
+                config,
+                library,
+                artist_list_state,
+                album_list_state,
+                album_display_list_state,
+                panel_focus,
+                expanded_albums,
+                &play_state,
+                progress,
+                elapsed,
+                duration,
+                mpd_status,
+                menu_mode,
+                bit_perfect_enabled,
+            );
+        }
     }
 
     // Render key sequence status overlay
