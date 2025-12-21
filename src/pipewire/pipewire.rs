@@ -10,6 +10,7 @@ use pipewire::metadata::Metadata;
 use pipewire::properties::PropertiesBox;
 use pipewire::registry::GlobalObject;
 use pipewire::types::ObjectType;
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -28,8 +29,8 @@ use std::time::Duration;
 pub fn set_sample_rate(rate: u32) -> Result<(), String> {
     pw::init();
 
-    let mainloop = MainLoopBox::new(None)
-        .map_err(|e| format!("Failed to create PipeWire MainLoop: {}", e))?;
+    let mainloop =
+        MainLoopBox::new(None).map_err(|e| format!("Failed to create PipeWire MainLoop: {}", e))?;
 
     let context = ContextBox::new(mainloop.loop_(), None)
         .map_err(|e| format!("Failed to create PipeWire Context: {}", e))?;
@@ -55,7 +56,6 @@ pub fn set_sample_rate(rate: u32) -> Result<(), String> {
             if global.type_ == ObjectType::Metadata {
                 if let Some(props) = global.props.as_ref() {
                     let name = props.get("metadata.name");
-                    eprintln!("[PipeWire] Found metadata: id={}, name={:?}", global.id, name);
                     // Check if this is the "settings" metadata
                     if name == Some("settings") {
                         // Store an owned copy of the global for later binding
@@ -90,10 +90,29 @@ pub fn set_sample_rate(rate: u32) -> Result<(), String> {
     let rate_str = rate.to_string();
     metadata.set_property(0, "clock.force-rate", None, Some(&rate_str));
 
-    // Give PipeWire a moment to process the property change
-    // Drop the borrow first
+    // Use sync to ensure the property change is flushed to the server
+    let done = Rc::new(Cell::new(false));
+    let done_clone = done.clone();
+
+    let _core_listener = core
+        .add_listener_local()
+        .done(move |_id, _seq| {
+            done_clone.set(true);
+        })
+        .register();
+
+    // Trigger a sync - this will cause a done event when all prior commands are processed
+    core.sync(0).map_err(|e| format!("Failed to sync: {}", e))?;
+
+    // Drop the borrow before running the loop
     drop(global_ref);
-    mainloop.loop_().iterate(Duration::from_millis(50));
+
+    // Wait for the done event
+    let sync_start = std::time::Instant::now();
+    let sync_timeout = Duration::from_millis(500);
+    while !done.get() && sync_start.elapsed() < sync_timeout {
+        mainloop.loop_().iterate(Duration::from_millis(10));
+    }
 
     Ok(())
 }

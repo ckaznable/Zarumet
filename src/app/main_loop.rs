@@ -147,9 +147,7 @@ impl AppMainLoop for App {
                                 if let Some(song_rate) = song.sample_rate() {
                                     let target_rate =
                                         self.config.pipewire.resolve_rate(song_rate);
-                                    if let Err(e) = crate::pipewire::set_sample_rate(target_rate) {
-                                        eprintln!("Failed to set PipeWire sample rate: {}", e);
-                                    }
+                                    let _ = crate::pipewire::set_sample_rate(target_rate);
                                 }
                             }
                         }
@@ -171,28 +169,14 @@ impl AppMainLoop for App {
                                 if let Some(song_rate) = song.sample_rate() {
                                     let target_rate =
                                         self.config.pipewire.resolve_rate(song_rate);
-                                    eprintln!(
-                                        "[PipeWire] Song rate: {}, Target rate: {}",
-                                        song_rate, target_rate
-                                    );
-                                    if let Err(e) = crate::pipewire::set_sample_rate(target_rate) {
-                                        eprintln!("Failed to set PipeWire sample rate: {}", e);
-                                    }
-                                } else {
-                                    eprintln!(
-                                        "[PipeWire] No sample rate found in song format: {:?}",
-                                        song.format
-                                    );
+                                    let _ = crate::pipewire::set_sample_rate(target_rate);
                                 }
                             }
                         }
                         Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
                             // Paused or stopped - reset to automatic rate
                             if last_play_state == Some(PlayState::Playing) {
-                                eprintln!("[PipeWire] Resetting sample rate (playback stopped/paused)");
-                                if let Err(e) = crate::pipewire::reset_sample_rate() {
-                                    eprintln!("Failed to reset PipeWire sample rate: {}", e);
-                                }
+                                let _ = crate::pipewire::reset_sample_rate();
                             }
                         }
                     }
