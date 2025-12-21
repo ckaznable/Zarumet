@@ -67,8 +67,8 @@ pub fn get_log_directory() -> PathBuf {
         .join("zarumet/logs");
 
     #[cfg(target_os = "macos")]
-    return dirs::home_dir()
-        .map(|h| h.join("Library/Logs/zarumet"))
+    return dirs::data_dir()
+        .map(|h| h.join("Logs/zarumet"))
         .unwrap_or_else(|| PathBuf::from("./logs"));
 
     #[cfg(target_os = "windows")]
