@@ -4,12 +4,66 @@ use crate::binds::KeyBinds;
 use crate::config::Config;
 use crate::ui::menu::{MenuMode, PanelFocus};
 use ratatui::widgets::ListState;
+use std::path::PathBuf;
 
 /// Trait for App construction
 pub trait AppConstructor {
     fn new(args: Args) -> color_eyre::Result<Self>
     where
         Self: Sized;
+}
+
+/// Get the path to the state file
+fn get_state_path() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    Some(
+        PathBuf::from(home)
+            .join(".local")
+            .join("state")
+            .join("zarumet")
+            .join("state.toml"),
+    )
+}
+
+/// Load bit-perfect state from state file
+fn load_bit_perfect_state() -> bool {
+    let state_path = match get_state_path() {
+        Some(path) => path,
+        None => return false,
+    };
+
+    if !state_path.exists() {
+        return false;
+    }
+
+    let contents = match std::fs::read_to_string(&state_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    // Simple parsing: look for "bit_perfect = true"
+    contents
+        .lines()
+        .find(|line| line.starts_with("bit_perfect"))
+        .and_then(|line| line.split('=').nth(1))
+        .map(|val| val.trim() == "true")
+        .unwrap_or(false)
+}
+
+/// Save bit-perfect state to state file
+pub fn save_bit_perfect_state(enabled: bool) -> std::io::Result<()> {
+    let state_path = match get_state_path() {
+        Some(path) => path,
+        None => return Ok(()),
+    };
+
+    // Create directory if it doesn't exist
+    if let Some(parent) = state_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let contents = format!("bit_perfect = {}\n", enabled);
+    std::fs::write(&state_path, contents)
 }
 
 impl AppConstructor for App {
@@ -30,6 +84,12 @@ impl AppConstructor for App {
         let key_binds =
             KeyBinds::new_with_sequential(global_map, queue_map, tracks_map, sequential_bindings);
 
+        // Determine bit-perfect state: CLI flag takes priority, then saved state
+        let bit_perfect_enabled = match args.bit_perfect {
+            Some(value) => value, // CLI explicitly set on/off
+            None => load_bit_perfect_state(), // No CLI flag, use saved state
+        };
+
         Ok(Self {
             running: false,
             current_song: None,
@@ -46,6 +106,7 @@ impl AppConstructor for App {
             expanded_albums: std::collections::HashSet::new(),
             mpd_status: None,
             key_binds,
+            bit_perfect_enabled,
         })
     }
 }

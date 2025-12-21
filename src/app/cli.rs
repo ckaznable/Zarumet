@@ -14,4 +14,17 @@ pub struct Args {
     /// MPD server address (overrides config)
     #[arg(short, long)]
     pub address: Option<String>,
+
+    /// Set bit-perfect mode (PipeWire sample rate matching): "on" or "off"
+    #[arg(short, long, value_parser = parse_on_off)]
+    pub bit_perfect: Option<bool>,
+}
+
+/// Parse "on" or "off" string to boolean
+fn parse_on_off(s: &str) -> Result<bool, String> {
+    match s.to_lowercase().as_str() {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        _ => Err(format!("Invalid value '{}': expected 'on' or 'off'", s)),
+    }
 }

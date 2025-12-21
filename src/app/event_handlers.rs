@@ -2,6 +2,7 @@ use crossterm::event::{Event, KeyEvent, KeyEventKind};
 use mpd_client::Client;
 
 use super::App;
+use crate::app::constructor::save_bit_perfect_state;
 use crate::app::mpd_handler::MPDAction;
 use crate::app::navigation::Navigation;
 
@@ -35,6 +36,13 @@ impl EventHandlers for App {
         {
             match action {
                 MPDAction::Quit => self.quit(),
+                MPDAction::ToggleBitPerfect => {
+                    self.bit_perfect_enabled = !self.bit_perfect_enabled;
+                    // If disabling, reset PipeWire sample rate to automatic
+                    if !self.bit_perfect_enabled {
+                        let _ = crate::pipewire::reset_sample_rate();
+                    }
+                }
                 MPDAction::Next | MPDAction::Previous => {
                     // Only allow Next/Previous if queue is not empty
                     if !self.queue.is_empty() {
@@ -52,6 +60,8 @@ impl EventHandlers for App {
 
     /// Set running to false to quit the application.
     fn quit(&mut self) {
+        // Save bit-perfect state before quitting
+        let _ = save_bit_perfect_state(self.bit_perfect_enabled);
         self.running = false;
     }
 }

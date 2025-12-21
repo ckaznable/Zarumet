@@ -98,6 +98,7 @@ impl AppMainLoop for App {
                     &self.expanded_albums,
                     &self.mpd_status,
                     &self.key_binds,
+                    self.bit_perfect_enabled,
                 )
             })?;
 
@@ -139,8 +140,8 @@ impl AppMainLoop for App {
                     .and_then(|reader| reader.decode().ok())
                     .map(|dyn_img| picker.new_resize_protocol(dyn_img));
 
-                // Update PipeWire sample rate if enabled and playing
-                if self.config.pipewire.enabled {
+                // Update PipeWire sample rate if bit-perfect mode enabled and playing
+                if self.bit_perfect_enabled {
                     if let Some(ref status) = self.mpd_status {
                         if status.state == PlayState::Playing {
                             if let Some(ref song) = self.current_song {
@@ -158,7 +159,7 @@ impl AppMainLoop for App {
             }
 
             // Handle PipeWire sample rate based on playback state changes
-            if self.config.pipewire.enabled {
+            if self.bit_perfect_enabled {
                 let current_play_state = self.mpd_status.as_ref().map(|s| s.state);
 
                 if current_play_state != last_play_state {

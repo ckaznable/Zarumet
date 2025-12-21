@@ -45,4 +45,6 @@ pub struct App {
     pub mpd_status: Option<mpd_client::responses::Status>,
     /// Key bindings handler
     pub key_binds: KeyBinds,
+    /// Bit-perfect mode enabled (PipeWire sample rate matching)
+    pub bit_perfect_enabled: bool,
 }

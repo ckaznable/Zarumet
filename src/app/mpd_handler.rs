@@ -68,6 +68,9 @@ pub enum MPDAction {
     // Jump to top/bottom
     GoToTop,
     GoToBottom,
+
+    // PipeWire bit-perfect mode
+    ToggleBitPerfect,
 }
 
 impl MPDAction {
@@ -190,7 +193,8 @@ impl MPDAction {
             | MPDAction::ScrollUp
             | MPDAction::ScrollDown
             | MPDAction::GoToTop
-            | MPDAction::GoToBottom => {
+            | MPDAction::GoToBottom
+            | MPDAction::ToggleBitPerfect => {
                 // These are handled by the main application
             }
         }

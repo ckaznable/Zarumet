@@ -161,6 +161,8 @@ pub struct BindsConfig {
     pub go_to_top: Vec<String>,
     #[serde(default = "BindsConfig::default_go_to_bottom")]
     pub go_to_bottom: Vec<String>,
+    #[serde(default = "BindsConfig::default_toggle_bit_perfect")]
+    pub toggle_bit_perfect: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -589,6 +591,9 @@ impl BindsConfig {
     fn default_go_to_bottom() -> Vec<String> {
         vec!["shift-g".to_string()]
     }
+    fn default_toggle_bit_perfect() -> Vec<String> {
+        vec!["b".to_string()]
+    }
 
     pub fn parse_keybinding(
         &self,
@@ -870,6 +875,12 @@ impl BindsConfig {
             single_map,
             sequential_bindings,
         );
+        self.add_enhanced_binding_for_action(
+            &self.toggle_bit_perfect,
+            crate::app::mpd_handler::MPDAction::ToggleBitPerfect,
+            single_map,
+            sequential_bindings,
+        );
     }
 
     /// Helper method to add bindings that may be sequential
@@ -1083,6 +1094,7 @@ impl Default for BindsConfig {
             scroll_down: Self::default_scroll_down_enhanced(),
             go_to_top: Self::default_go_to_top(),
             go_to_bottom: Self::default_go_to_bottom(),
+            toggle_bit_perfect: Self::default_toggle_bit_perfect(),
         }
     }
 }

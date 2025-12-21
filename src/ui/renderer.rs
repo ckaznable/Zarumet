@@ -1,15 +1,15 @@
 use ratatui::{
-    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, ListState, Paragraph},
+    Frame,
 };
 
 use crate::config::Config;
 use crate::song::{Library, SongInfo};
 use crate::ui::menu::{MenuMode, PanelFocus};
-use crate::ui::utils::{DisplayItem, compute_album_display_list};
+use crate::ui::utils::{compute_album_display_list, DisplayItem};
 use crate::ui::widgets::{
     create_empty_box, create_format_widget, create_left_box_bottom, create_left_box_top,
     create_song_widget, create_top_box, render_image_widget,
@@ -123,6 +123,7 @@ pub fn render(
     expanded_albums: &std::collections::HashSet<(String, String)>,
     mpd_status: &Option<mpd_client::responses::Status>,
     key_binds: &crate::binds::KeyBinds,
+    bit_perfect_enabled: bool,
 ) {
     let area = frame.area();
 
@@ -156,6 +157,7 @@ pub fn render(
                 duration,
                 mpd_status,
                 menu_mode,
+                bit_perfect_enabled,
             );
         }
         MenuMode::Tracks => {
@@ -178,6 +180,7 @@ pub fn render(
                 duration,
                 mpd_status,
                 menu_mode,
+                bit_perfect_enabled,
             );
         }
     }
@@ -201,6 +204,7 @@ fn render_queue_mode(
     duration: Option<std::time::Duration>,
     mpd_status: &Option<mpd_client::responses::Status>,
     menu_mode: &MenuMode,
+    bit_perfect_enabled: bool,
 ) {
     // Original layout - restore exactly as it was before changes
     // Split the area horizontally: left box, right content
@@ -230,7 +234,7 @@ fn render_queue_mode(
     frame.render_widget(format_widget, main_vertical_chunks[0]);
 
     // Render middle box that spans both splits
-    let middle_box = create_top_box(config, mpd_status.as_ref(), menu_mode);
+    let middle_box = create_top_box(config, mpd_status.as_ref(), menu_mode, bit_perfect_enabled);
     frame.render_widget(middle_box, main_vertical_chunks[1]);
 
     // Render widgets in left vertical split
@@ -283,6 +287,7 @@ fn render_tracks_mode(
     duration: Option<std::time::Duration>,
     mpd_status: &Option<mpd_client::responses::Status>,
     menu_mode: &MenuMode,
+    bit_perfect_enabled: bool,
 ) {
     // Same as original layout, but replace queue box with 2 side-by-side boxes
     // Split area vertically: top section, middle section, bottom section
@@ -319,7 +324,7 @@ fn render_tracks_mode(
     frame.render_widget(format_widget, main_vertical_chunks[0]);
 
     // Render middle box that spans both splits
-    let middle_box = create_top_box(config, mpd_status.as_ref(), menu_mode);
+    let middle_box = create_top_box(config, mpd_status.as_ref(), menu_mode, bit_perfect_enabled);
     frame.render_widget(middle_box, main_vertical_chunks[1]);
 
     // Render artists list
@@ -438,10 +443,8 @@ fn render_tracks_mode(
                             let display_text =
                                 format!(" {}{}   {}", truncated_album_name, filler, duration_str);
 
-                            ratatui::widgets::ListItem::new(vec![
-                                Line::from(display_text)
-                                    .style(Style::default().fg(config.colors.album_color())),
-                            ])
+                            ratatui::widgets::ListItem::new(vec![Line::from(display_text)
+                                .style(Style::default().fg(config.colors.album_color()))])
                         }
                         DisplayItem::Song(song_title, duration, _file_path) => {
                             let song_duration_str = match duration {
