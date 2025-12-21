@@ -71,9 +71,19 @@ impl EventHandlers for App {
                     // Only allow toggling if bit-perfect is available (allowed_rates configured)
                     if self.config.pipewire.is_available() {
                         self.bit_perfect_enabled = !self.bit_perfect_enabled;
-                        // If disabling, reset PipeWire sample rate to automatic
                         #[cfg(target_os = "linux")]
-                        if !self.bit_perfect_enabled {
+                        if self.bit_perfect_enabled {
+                            // Enabling - set sample rate if currently playing
+                            if let Some(ref status) = self.mpd_status
+                                && status.state == mpd_client::responses::PlayState::Playing
+                                && let Some(ref song) = self.current_song
+                                && let Some(song_rate) = song.sample_rate()
+                            {
+                                let target_rate = self.config.pipewire.resolve_rate(song_rate);
+                                let _ = crate::pipewire::set_sample_rate(target_rate);
+                            }
+                        } else {
+                            // Disabling - reset PipeWire sample rate to automatic
                             let _ = crate::pipewire::reset_sample_rate();
                         }
                     }
