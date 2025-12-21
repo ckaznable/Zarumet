@@ -236,22 +236,22 @@ fn get_supported_rates_inner() -> Result<Vec<u32>, String> {
         .add_listener_local()
         .global(move |global| {
             // Look for device and node objects that might have sample rate info
-            if global.type_ == ObjectType::Device || global.type_ == ObjectType::Node {
-                if let Some(props) = global.props.as_ref() {
-                    // Check for audio devices/nodes
-                    if let Some(media_class) = props.get("media.class") {
-                        if media_class.contains("Audio") {
-                            // Extract sample rates from device properties
-                            if let Some(rates_str) = props.get("device.profile.description") {
-                                // Try to parse sample rates from description (may contain rate info)
-                                extract_rates_from_description(rates_str, &supported_rates_clone);
-                            }
+            if (global.type_ == ObjectType::Device || global.type_ == ObjectType::Node)
+                && let Some(props) = global.props.as_ref()
+            {
+                // Check for audio devices/nodes
+                if let Some(media_class) = props.get("media.class")
+                    && media_class.contains("Audio")
+                {
+                    // Extract sample rates from device properties
+                    if let Some(rates_str) = props.get("device.profile.description") {
+                        // Try to parse sample rates from description (may contain rate info)
+                        extract_rates_from_description(rates_str, &supported_rates_clone);
+                    }
 
-                            // Check for common audio format properties
-                            if let Some(formats) = props.get("format.dsp") {
-                                extract_rates_from_format_string(formats, &supported_rates_clone);
-                            }
-                        }
+                    // Check for common audio format properties
+                    if let Some(formats) = props.get("format.dsp") {
+                        extract_rates_from_format_string(formats, &supported_rates_clone);
                     }
                 }
             }
@@ -294,18 +294,18 @@ fn extract_rates_from_description(desc: &str, rates: &Rc<RefCell<Vec<u32>>>) {
     for pattern in &rate_patterns {
         if let Ok(re) = regex::Regex::new(pattern) {
             for cap in re.captures_iter(desc) {
-                if let Some(rate_str) = cap.get(1) {
-                    if let Ok(rate_val) = rate_str.as_str().parse::<u32>() {
-                        let rate = if pattern.contains("kHz") || pattern.contains("khz") {
-                            rate_val * 1000
-                        } else {
-                            rate_val
-                        };
+                if let Some(rate_str) = cap.get(1)
+                    && let Ok(rate_val) = rate_str.as_str().parse::<u32>()
+                {
+                    let rate = if pattern.contains("kHz") || pattern.contains("khz") {
+                        rate_val * 1000
+                    } else {
+                        rate_val
+                    };
 
-                        // Only add if it's a reasonable sample rate and not already present
-                        if rate >= 8000 && rate <= 384000 && !rates.borrow().contains(&rate) {
-                            rates.borrow_mut().push(rate);
-                        }
+                    // Only add if it's a reasonable sample rate and not already present
+                    if (8000..=384000).contains(&rate) && !rates.borrow().contains(&rate) {
+                        rates.borrow_mut().push(rate);
                     }
                 }
             }
@@ -322,7 +322,7 @@ fn extract_rates_from_format_string(format_str: &str, rates: &Rc<RefCell<Vec<u32
     for word in words {
         if let Ok(rate) = word.parse::<u32>() {
             // Check if this looks like a valid sample rate
-            if rate >= 8000 && rate <= 384000 && !rates.borrow().contains(&rate) {
+            if (8000..=384000).contains(&rate) && !rates.borrow().contains(&rate) {
                 rates.borrow_mut().push(rate);
             }
         }

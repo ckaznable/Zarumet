@@ -57,10 +57,10 @@ async fn main() -> color_eyre::Result<()> {
     // Initialize PipeWire supported rates cache if on Linux and bit-perfect is enabled
     #[cfg(target_os = "linux")]
     {
-        if config.pipewire.bit_perfect_enabled {
-            if let Err(e) = crate::pipewire::initialize_supported_rates() {
-                log::warn!("Failed to initialize PipeWire supported rates: {}", e);
-            }
+        if config.pipewire.bit_perfect_enabled
+            && let Err(e) = crate::pipewire::initialize_supported_rates()
+        {
+            log::warn!("Failed to initialize PipeWire supported rates: {}", e);
         }
     }
 

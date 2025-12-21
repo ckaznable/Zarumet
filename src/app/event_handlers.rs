@@ -78,16 +78,14 @@ impl EventHandlers for App {
                                 && status.state == mpd_client::responses::PlayState::Playing
                                 && let Some(ref song) = self.current_song
                                 && let Some(song_rate) = song.sample_rate()
-                            {
-                                if let Some(supported_rates) =
+                                && let Some(supported_rates) =
                                     crate::pipewire::get_supported_rates()
-                                {
-                                    let target_rate = crate::config::resolve_bit_perfect_rate(
-                                        song_rate,
-                                        &supported_rates,
-                                    );
-                                    let _ = crate::pipewire::set_sample_rate(target_rate);
-                                }
+                            {
+                                let target_rate = crate::config::resolve_bit_perfect_rate(
+                                    song_rate,
+                                    &supported_rates,
+                                );
+                                let _ = crate::pipewire::set_sample_rate(target_rate);
                             }
                         } else {
                             // Disabling - reset PipeWire sample rate to automatic

@@ -122,21 +122,20 @@ impl AppMainLoop for App {
             let initial_play_state = self.mpd_status.as_ref().map(|s| s.state);
             let initial_sample_rate = self.current_song.as_ref().and_then(|s| s.sample_rate());
 
-            if self.bit_perfect_enabled && self.config.pipewire.is_available() {
-                if let (Some(PlayState::Playing), Some(song_rate)) =
+            if self.bit_perfect_enabled
+                && self.config.pipewire.is_available()
+                && let (Some(PlayState::Playing), Some(song_rate)) =
                     (initial_play_state, initial_sample_rate)
-                {
-                    if let Some(supported_rates) = crate::pipewire::get_supported_rates() {
-                        let target_rate =
-                            crate::config::resolve_bit_perfect_rate(song_rate, &supported_rates);
-                        log::debug!(
-                            "Setting PipeWire sample rate to {} on startup (song rate: {})",
-                            target_rate,
-                            song_rate
-                        );
-                        let _ = crate::pipewire::set_sample_rate(target_rate);
-                    }
-                }
+                && let Some(supported_rates) = crate::pipewire::get_supported_rates()
+            {
+                let target_rate =
+                    crate::config::resolve_bit_perfect_rate(song_rate, &supported_rates);
+                log::debug!(
+                    "Setting PipeWire sample rate to {} on startup (song rate: {})",
+                    target_rate,
+                    song_rate
+                );
+                let _ = crate::pipewire::set_sample_rate(target_rate);
             }
         }
 
