@@ -255,6 +255,57 @@ go_to_bottom = ["shift-g"]
 
 </details>
 
+<details>
+<summary>Bit-Perfect Mode (PipeWire)</summary>
+## Bit-Perfect Mode (PipeWire)
+
+Zarumet supports bit-perfect audio playback by automatically adjusting the PipeWire sample rate to match the current song's sample rate. This prevents resampling and ensures the highest quality audio output.
+
+### Requirements
+
+- PipeWire audio server
+- MPD configured to output through PipeWire
+
+### Configuration
+
+To enable bit-perfect mode, add a `[pipewire]` section to your config file with the sample rates your DAC supports:
+
+```Toml
+[pipewire]
+allowed_rates = [44100, 48000, 88200, 96000]
+```
+
+The `allowed_rates` array should contain all sample rates supported by your audio hardware. Common values include:
+
+- `44100` - CD quality
+- `48000` - DVD/common digital audio
+- `88200` - 2x CD quality
+- `96000` - High-resolution audio
+- `176400` - 4x CD quality  
+- `192000` - High-resolution audio
+
+### Usage
+
+Once configured, toggle bit-perfect mode on/off with `b` (default keybind). The mode indicator will appear in the UI when enabled.
+
+When a song plays, Zarumet will:
+
+1. Use the song's native sample rate if it's in your `allowed_rates`
+2. Otherwise, select the highest compatible rate from your allowed rates
+3. Fall back to 44100 Hz if no compatible rate is found
+
+### CLI Option
+
+You can also set the initial bit-perfect state via command line:
+
+```Bash
+zarumet --bit-perfect on   # Start with bit-perfect enabled
+zarumet --bit-perfect off  # Start with bit-perfect disabled
+```
+
+The state is persisted between sessions.
+</details>
+
 ## ⚡ Inspired By
 
 - [rmpc](https://rmpc.mierak.dev/)
