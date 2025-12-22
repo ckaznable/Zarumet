@@ -338,12 +338,14 @@ impl LazyLibrary {
         log::info!("Preloading all albums for Albums view (bulk)...");
         let start_time = std::time::Instant::now();
 
-        // Fetch ALL songs in the library at once - much faster than per-artist queries
-        // MPD command: listallinfo
+        // Fetch ALL songs in the library at once using find with a filter that matches everything
+        // This is faster than per-artist queries and more reliable than listallinfo
+        // MPD command: find "(file != '')"
+        let filter = Filter::tag_exists(Tag::Other("file".into()));
         let all_songs = client
-            .command(commands::ListAllIn::root())
+            .command(commands::Find::new(filter))
             .await
-            .map_err(|e| color_eyre::eyre::eyre!("Failed to list all songs: {}", e))?;
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to find all songs: {}", e))?;
 
         // Group by artist -> album -> songs
         let mut artist_albums: std::collections::HashMap<
