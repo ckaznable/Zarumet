@@ -400,8 +400,9 @@ impl Navigation for App {
                         }
                     }
                     MenuMode::Tracks => {
-                        // Tracks mode: add album to queue (existing behavior)
-                        self.handle_add_to_queue(client).await?;
+                        // Tracks mode: context-aware based on what's selected
+                        // If on a song, add the song; if on an album, add the album
+                        self.handle_add_to_queue_context_aware(client).await?;
                     }
                     MenuMode::Queue => {
                         // Queue mode: no action
@@ -1101,27 +1102,60 @@ impl App {
         Ok(())
     }
 
-    /// Handle adding songs to queue
-    async fn handle_add_to_queue(&mut self, client: &Client) -> color_eyre::Result<()> {
+    /// Handle adding to queue in Tracks mode - context-aware based on what's selected
+    /// If on a song, add the song; if on an album, add the album
+    async fn handle_add_to_queue_context_aware(
+        &mut self,
+        client: &Client,
+    ) -> color_eyre::Result<()> {
         if let (Some(library), Some(selected_artist_index)) =
             (&self.library, self.artist_list_state.selected())
             && let Some(selected_artist) = library.artists.get(selected_artist_index)
-            && let Some(selected_album_index) = self.album_list_state.selected()
-            && let Some(selected_album) = selected_artist.albums.get(selected_album_index)
+            && let Some(display_index) = self.album_display_list_state.selected()
         {
-            // Add all songs from the album to queue
-            let queue_was_empty = self.queue.is_empty();
-            for song in &selected_album.tracks {
-                if let Err(e) = client
-                    .command(commands::Add::uri(song.file_path.to_str().unwrap()))
-                    .await
-                {
-                    error!("Error adding song to queue: {}", e);
+            let (display_items, _album_indices) =
+                compute_album_display_list(selected_artist, &self.expanded_albums);
+
+            if let Some(display_item) = display_items.get(display_index) {
+                match display_item {
+                    DisplayItem::Album(album_name) => {
+                        // Add entire album to queue
+                        if let Some(album) = selected_artist
+                            .albums
+                            .iter()
+                            .find(|a| &a.name == album_name)
+                        {
+                            let queue_was_empty = self.queue.is_empty();
+                            for song in &album.tracks {
+                                if let Err(e) = client
+                                    .command(commands::Add::uri(song.file_path.to_str().unwrap()))
+                                    .await
+                                {
+                                    error!("Error adding song to queue: {}", e);
+                                }
+                            }
+                            if queue_was_empty
+                                && let Err(e) = client.command(commands::Play::current()).await
+                            {
+                                error!("Error starting playback: {}", e);
+                            }
+                        }
+                    }
+                    DisplayItem::Song(_title, _duration, file_path) => {
+                        // Add specific song to queue
+                        let queue_was_empty = self.queue.is_empty();
+                        if let Err(e) = client
+                            .command(commands::Add::uri(file_path.to_str().unwrap()))
+                            .await
+                        {
+                            error!("Error adding song to queue: {}", e);
+                        } else if queue_was_empty {
+                            if let Err(e) = client.command(commands::Play::current()).await {
+                                error!("Error starting playback: {}", e);
+                            }
+                        }
+                    }
                 }
-            }
-            // Start playback if queue was empty
-            if queue_was_empty && let Err(e) = client.command(commands::Play::current()).await {
-                error!("Error starting playback: {}", e);
             }
         }
         Ok(())
