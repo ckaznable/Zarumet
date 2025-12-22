@@ -135,30 +135,49 @@ pub struct Artist {
     pub albums: Vec<Album>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum ArtistData {
+    NotLoaded,
+    Loading,
+    Loaded(Vec<Album>),
+}
+
 /// Lazy-loaded artist: initially only has the name, albums are loaded on demand
 #[derive(Debug, Clone)]
 pub struct LazyArtist {
     pub name: String,
-    /// Albums for this artist - None means not yet loaded
-    pub albums: Option<Vec<Album>>,
+    /// Albums for this artist - tracks loading state to prevent concurrent loads
+    pub albums: ArtistData,
 }
 
 impl LazyArtist {
     /// Create a new lazy artist with just the name
     pub fn new(name: String) -> Self {
-        Self { name, albums: None }
+        Self {
+            name,
+            albums: ArtistData::NotLoaded,
+        }
     }
 
     /// Check if this artist's albums have been loaded
     pub fn is_loaded(&self) -> bool {
-        self.albums.is_some()
+        matches!(self.albums, ArtistData::Loaded(_))
+    }
+
+    /// Check if this artist's albums are currently being loaded
+    pub fn is_loading(&self) -> bool {
+        matches!(self.albums, ArtistData::Loading)
     }
 
     /// Convert to a regular Artist (returns empty albums if not loaded)
     pub fn to_artist(&self) -> Artist {
+        let albums = match &self.albums {
+            ArtistData::Loaded(albums) => albums.clone(),
+            _ => Vec::new(),
+        };
         Artist {
             name: self.name.clone(),
-            albums: self.albums.clone().unwrap_or_default(),
+            albums,
         }
     }
 }
@@ -234,7 +253,18 @@ impl LazyLibrary {
             return Ok(());
         }
 
+        // Skip if already loading - prevents concurrent loads
+        if self.artists[artist_index].is_loading() {
+            log::debug!(
+                "Artist {} is already loading, skipping duplicate load",
+                self.artists[artist_index].name
+            );
+            return Ok(());
+        }
+
+        // Set state to Loading to prevent concurrent loads
         let artist_name = self.artists[artist_index].name.clone();
+        self.artists[artist_index].albums = ArtistData::Loading;
         log::debug!("Loading albums for artist: {}", artist_name);
 
         let start_time = std::time::Instant::now();
@@ -243,10 +273,11 @@ impl LazyLibrary {
         let filter = Filter::new(Tag::AlbumArtist, Operator::Equal, artist_name.clone());
         let find_cmd = commands::Find::new(filter).sort(Tag::Album);
 
-        let songs = client
-            .command(find_cmd)
-            .await
-            .map_err(|e| color_eyre::eyre::eyre!("Failed to find songs for artist: {}", e))?;
+        let songs = client.command(find_cmd).await.map_err(|e| {
+            // Revert to NotLoaded on error
+            self.artists[artist_index].albums = ArtistData::NotLoaded;
+            color_eyre::eyre::eyre!("Failed to find songs for artist: {}", e)
+        })?;
 
         // Group songs by album
         let mut albums_map: std::collections::HashMap<String, Vec<SongInfo>> =
@@ -303,7 +334,7 @@ impl LazyLibrary {
         self.all_albums_sorted = false;
 
         // Store the loaded albums
-        self.artists[artist_index].albums = Some(albums);
+        self.artists[artist_index].albums = ArtistData::Loaded(albums);
 
         // Check if all artists are now loaded
         self.all_albums_complete = self.artists.iter().all(|a| a.is_loaded());
@@ -413,10 +444,10 @@ impl LazyLibrary {
                     self.all_albums.push((artist.name.clone(), album.clone()));
                 }
 
-                artist.albums = Some(albums);
+                artist.albums = ArtistData::Loaded(albums);
             } else {
                 // Artist has no songs, mark as loaded with empty albums
-                artist.albums = Some(Vec::new());
+                artist.albums = ArtistData::Loaded(Vec::new());
             }
         }
 
