@@ -329,100 +329,84 @@ impl LazyLibrary {
     }
 
     /// Preload all albums for the Albums view.
-    /// This loads all artists in parallel for faster loading.
+    /// Uses a fast bulk approach: fetches all songs at once instead of per-artist.
     pub async fn preload_all_albums(&mut self, client: &Client) -> color_eyre::Result<()> {
         if self.all_albums_complete {
             return Ok(());
         }
 
-        log::info!("Preloading all albums for Albums view (parallel)...");
+        log::info!("Preloading all albums for Albums view (bulk)...");
         let start_time = std::time::Instant::now();
 
-        // Collect indices of artists that need loading
-        let unloaded_indices: Vec<usize> = self
-            .artists
-            .iter()
-            .enumerate()
-            .filter(|(_, a)| !a.is_loaded())
-            .map(|(i, _)| i)
-            .collect();
+        // Fetch ALL songs in the library at once - much faster than per-artist queries
+        // MPD command: listallinfo
+        let all_songs = client
+            .command(commands::ListAllIn::root())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to list all songs: {}", e))?;
 
-        if unloaded_indices.is_empty() {
-            self.all_albums_complete = true;
-            return Ok(());
+        // Group by artist -> album -> songs
+        let mut artist_albums: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, Vec<SongInfo>>,
+        > = std::collections::HashMap::new();
+
+        for song in all_songs {
+            let song_info = SongInfo::from_song(&song);
+            // Use album artist for grouping (fall back to artist if not set)
+            let artist_name = song
+                .album_artists()
+                .first()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| song_info.artist.clone());
+            let album_name = song_info.album.clone();
+
+            artist_albums
+                .entry(artist_name)
+                .or_default()
+                .entry(album_name)
+                .or_default()
+                .push(song_info);
         }
 
-        // Fetch all artist data in parallel
-        let fetch_futures = unloaded_indices.iter().map(|&idx| {
-            let artist_name = self.artists[idx].name.clone();
-            let client = client.clone();
-            async move {
-                let filter = Filter::new(Tag::AlbumArtist, Operator::Equal, artist_name.clone());
-                let find_cmd = commands::Find::new(filter).sort(Tag::Album);
-
-                let result = client.command(find_cmd).await;
-                (idx, artist_name, result)
+        // Update each artist's albums
+        for artist in &mut self.artists {
+            if artist.is_loaded() {
+                continue;
             }
-        });
 
-        let results: Vec<_> = futures::future::join_all(fetch_futures).await;
-
-        // Process results sequentially (updates shared state)
-        for (idx, artist_name, result) in results {
-            match result {
-                Ok(songs) => {
-                    // Group songs by album
-                    let mut albums_map: std::collections::HashMap<String, Vec<SongInfo>> =
-                        std::collections::HashMap::new();
-
-                    for song in songs {
-                        let song_info = SongInfo::from_song(&song);
-                        let album_name = song_info.album.clone();
-                        albums_map.entry(album_name).or_default().push(song_info);
-                    }
-
-                    // Build album list
-                    let mut albums: Vec<Album> = albums_map
-                        .into_iter()
-                        .map(|(album_name, mut tracks)| {
-                            // Sort tracks by disc and track number
-                            tracks.sort_by(|a, b| {
-                                a.disc_number
-                                    .cmp(&b.disc_number)
-                                    .then(a.track_number.cmp(&b.track_number))
-                                    .then(a.title.cmp(&b.title))
-                            });
-                            Album {
-                                name: album_name,
-                                tracks,
-                            }
-                        })
-                        .collect();
-
-                    // Sort albums alphabetically
-                    albums.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-
-                    // Update all_albums
-                    for album in &albums {
-                        let exists = self
-                            .all_albums
-                            .iter()
-                            .any(|(a_name, a)| a_name == &artist_name && a.name == album.name);
-                        if !exists {
-                            self.all_albums.push((artist_name.clone(), album.clone()));
+            if let Some(albums_map) = artist_albums.remove(&artist.name) {
+                let mut albums: Vec<Album> = albums_map
+                    .into_iter()
+                    .map(|(album_name, mut tracks)| {
+                        tracks.sort_by(|a, b| {
+                            a.disc_number
+                                .cmp(&b.disc_number)
+                                .then(a.track_number.cmp(&b.track_number))
+                                .then(a.title.cmp(&b.title))
+                        });
+                        Album {
+                            name: album_name,
+                            tracks,
                         }
-                    }
+                    })
+                    .collect();
 
-                    // Store the loaded albums
-                    self.artists[idx].albums = Some(albums);
+                albums.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+                // Add to all_albums
+                for album in &albums {
+                    self.all_albums.push((artist.name.clone(), album.clone()));
                 }
-                Err(e) => {
-                    log::warn!("Failed to load artist '{}': {}", artist_name, e);
-                }
+
+                artist.albums = Some(albums);
+            } else {
+                // Artist has no songs, mark as loaded with empty albums
+                artist.albums = Some(Vec::new());
             }
         }
 
-        // Re-sort all_albums once at the end
+        // Sort all_albums once at the end
         self.all_albums.sort_by(|a, b| {
             a.1.name
                 .to_lowercase()
@@ -430,8 +414,7 @@ impl LazyLibrary {
                 .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
         });
 
-        // Check if all artists are now loaded
-        self.all_albums_complete = self.artists.iter().all(|a| a.is_loaded());
+        self.all_albums_complete = true;
 
         let duration = start_time.elapsed();
         log::info!(
