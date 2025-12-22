@@ -1,9 +1,9 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph, Wrap},
 };
 
 use crate::config::Config;
@@ -106,6 +106,66 @@ fn render_key_sequence_status(
     }
 }
 
+/// Render config warnings popup centered on screen
+fn render_config_warnings_popup(frame: &mut Frame, warnings: &[String], config: &Config) {
+    let area = frame.area();
+
+    // Calculate popup dimensions
+    let max_warning_width = warnings
+        .iter()
+        .map(|w| w.width())
+        .max()
+        .unwrap_or(20)
+        .max(30); // Minimum width of 30
+
+    let popup_width = (max_warning_width + 6).min(area.width as usize - 4) as u16; // +6 for borders and padding
+    let popup_height = (warnings.len() + 5).min(area.height as usize - 4) as u16; // +5 for title, borders, footer
+
+    // Center the popup
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+
+    let popup_area = Rect {
+        x: popup_x,
+        y: popup_y,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    // Clear the area behind the popup
+    frame.render_widget(Clear, popup_area);
+
+    // Build the warning text
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from("")); // Empty line after title
+
+    for warning in warnings {
+        lines.push(Line::from(Span::styled(
+            format!("  {}", warning),
+            Style::default().fg(config.colors.song_title_color()),
+        )));
+    }
+
+    lines.push(Line::from("")); // Empty line before footer
+    lines.push(Line::from(Span::styled(
+        "Press any key to close",
+        Style::default().fg(config.colors.top_accent_color()),
+    )));
+
+    let popup_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(config.colors.queue_selected_highlight_color()))
+        .title(Line::from(" Unknown Config Options ").fg(config.colors.border_title_color()));
+
+    let popup_text = Paragraph::new(lines)
+        .block(popup_block)
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(popup_text, popup_area);
+}
+
 /// Renders the user interface.
 #[allow(clippy::too_many_arguments)]
 pub fn render(
@@ -125,6 +185,8 @@ pub fn render(
     mpd_status: &Option<mpd_client::responses::Status>,
     key_binds: &crate::binds::KeyBinds,
     bit_perfect_enabled: bool,
+    show_config_warnings_popup: bool,
+    config_warnings: &[String],
 ) {
     let area = frame.area();
 
@@ -211,6 +273,11 @@ pub fn render(
 
     // Render key sequence status overlay
     render_key_sequence_status(frame, key_binds, area, config);
+
+    // Render config warnings popup if showing
+    if show_config_warnings_popup && !config_warnings.is_empty() {
+        render_config_warnings_popup(frame, config_warnings, config);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

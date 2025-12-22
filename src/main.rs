@@ -44,7 +44,7 @@ async fn main() -> color_eyre::Result<()> {
     let config_existed = config_path.exists();
 
     // Load config first for logger initialization
-    let mut config = Config::load(args.config.clone())?;
+    let (mut config, config_warnings) = Config::load(args.config.clone())?;
 
     if let Some(ref addr) = args.address {
         config.mpd.address = addr.clone();
@@ -57,6 +57,11 @@ async fn main() -> color_eyre::Result<()> {
         crate::logging::log_startup_info();
         // Log config loading now that logger is initialized
         crate::logging::log_config_loading(&config_path, !config_existed);
+
+        // Log any config warnings that were collected during loading
+        for warning in &config_warnings {
+            log::warn!("{}", warning);
+        }
     }
 
     // Initialize terminal
@@ -76,7 +81,13 @@ async fn main() -> color_eyre::Result<()> {
     }
 
     // Create app now that logger is initialized
-    let app = App::new_with_config(config, args.clone())?;
+    let mut app = App::new_with_config(config, args.clone())?;
+
+    // Set config warnings and show popup if there are any
+    if !config_warnings.is_empty() {
+        app.config_warnings = config_warnings;
+        app.show_config_warnings_popup = true;
+    }
 
     // Run application
     let result = app.run(terminal).await;

@@ -53,4 +53,8 @@ pub struct App {
     pub bit_perfect_enabled: bool,
     /// Flag to force immediate MPD status update (set after user actions)
     pub force_update: bool,
+    /// Config warnings to display in popup
+    pub config_warnings: Vec<String>,
+    /// Whether the config warnings popup is currently showing
+    pub show_config_warnings_popup: bool,
 }

@@ -310,7 +310,7 @@ impl Config {
         Ok(config_dir.join("zarumet").join("config.toml"))
     }
 
-    pub fn load(config_path: Option<PathBuf>) -> color_eyre::Result<Self> {
+    pub fn load(config_path: Option<PathBuf>) -> color_eyre::Result<(Self, Vec<String>)> {
         let config_path = match config_path {
             Some(path) => path,
             None => Self::default_config_path()?,
@@ -333,17 +333,171 @@ impl Config {
             // Note: log_config_logging is called from main.rs after logger is initialized
             eprintln!("Created default config file at: {}", config_path.display());
 
-            return Ok(default_config);
+            return Ok((default_config, Vec::new()));
         }
         let contents = std::fs::read_to_string(&config_path)?;
+
+        // Check for unknown config options before parsing
+        let warnings = Self::check_unknown_fields(&contents);
+
         let config: Config = toml::from_str(&contents).unwrap_or_else(|e| {
-            log::warn!("Failed to parse config file: {}", e);
+            // This warning will be lost since logger isn't initialized yet,
+            // but at least we log in debug mode
             if cfg!(debug_assertions) {
                 eprintln!("Warning: Failed to parse config file: {}", e);
             }
             Config::default()
         });
-        Ok(config)
+        Ok((config, warnings))
+    }
+
+    /// Check for unknown fields in the config file and return warnings
+    fn check_unknown_fields(contents: &str) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        // Known top-level sections
+        const KNOWN_SECTIONS: &[&str] = &["mpd", "colors", "binds", "pipewire", "logging"];
+
+        // Known fields per section
+        const KNOWN_MPD_FIELDS: &[&str] = &["address", "volume_increment", "volume_increment_fine"];
+
+        const KNOWN_COLORS_FIELDS: &[&str] = &[
+            "border",
+            "song_title",
+            "album",
+            "artist",
+            "border_title",
+            "progress_filled",
+            "progress_empty",
+            "paused",
+            "playing",
+            "stopped",
+            "time_separator",
+            "time_duration",
+            "time_elapsed",
+            "queue_selected_highlight",
+            "queue_selected_text",
+            "queue_album",
+            "queue_song_title",
+            "queue_artist",
+            "queue_position",
+            "queue_duration",
+            "top_accent",
+            "volume",
+            "volume_empty",
+            "mode",
+            "track_duration",
+        ];
+
+        const KNOWN_BINDS_FIELDS: &[&str] = &[
+            "next",
+            "previous",
+            "toggle_play_pause",
+            "volume_up",
+            "volume_up_fine",
+            "volume_down",
+            "volume_down_fine",
+            "toggle_mute",
+            "cycle_mode_right",
+            "cycle_mode_left",
+            "clear_queue",
+            "repeat",
+            "random",
+            "single",
+            "consume",
+            "quit",
+            "refresh",
+            "switch_to_queue_menu",
+            "switch_to_tracks",
+            "switch_to_albums",
+            "seek_forward",
+            "seek_backward",
+            "scroll_up",
+            "scroll_down",
+            "play_selected",
+            "remove_from_queue",
+            "move_up_in_queue",
+            "move_down_in_queue",
+            "switch_panel_left",
+            "switch_panel_right",
+            "toggle_album_expansion",
+            "add_to_queue",
+            "scroll_up_big",
+            "scroll_down_big",
+            "go_to_top",
+            "go_to_bottom",
+            "toggle_bit_perfect",
+        ];
+
+        const KNOWN_PIPEWIRE_FIELDS: &[&str] = &["bit_perfect_enabled"];
+
+        const KNOWN_LOGGING_FIELDS: &[&str] = &[
+            "enabled",
+            "level",
+            "log_to_console",
+            "append_to_file",
+            "rotate_logs",
+            "rotation_size_mb",
+            "keep_log_files",
+            "custom_log_path",
+        ];
+
+        // Parse as generic TOML table
+        let table: Result<toml::Table, _> = toml::from_str(contents);
+        let table = match table {
+            Ok(t) => t,
+            Err(_) => return warnings, // Let the main parser handle errors
+        };
+
+        // Check top-level sections
+        for key in table.keys() {
+            if !KNOWN_SECTIONS.contains(&key.as_str()) {
+                warnings.push(format!("Unknown config section: [{}]", key));
+            }
+        }
+
+        // Check fields in each known section
+        if let Some(toml::Value::Table(mpd)) = table.get("mpd") {
+            for key in mpd.keys() {
+                if !KNOWN_MPD_FIELDS.contains(&key.as_str()) {
+                    warnings.push(format!("Unknown config option in [mpd]: {}", key));
+                }
+            }
+        }
+
+        if let Some(toml::Value::Table(colors)) = table.get("colors") {
+            for key in colors.keys() {
+                if !KNOWN_COLORS_FIELDS.contains(&key.as_str()) {
+                    warnings.push(format!("Unknown config option in [colors]: {}", key));
+                }
+            }
+        }
+
+        if let Some(toml::Value::Table(binds)) = table.get("binds") {
+            for key in binds.keys() {
+                if !KNOWN_BINDS_FIELDS.contains(&key.as_str()) {
+                    warnings.push(format!("Unknown config option in [binds]: {}", key));
+                }
+            }
+        }
+
+        if let Some(toml::Value::Table(pipewire)) = table.get("pipewire") {
+            for key in pipewire.keys() {
+                if !KNOWN_PIPEWIRE_FIELDS.contains(&key.as_str()) {
+                    warnings.push(format!("Unknown config option in [pipewire]: {}", key));
+                }
+            }
+        }
+
+        if let Some(toml::Value::Table(logging)) = table.get("logging") {
+            for key in logging.keys() {
+                if !KNOWN_LOGGING_FIELDS.contains(&key.as_str()) {
+                    warnings.push(format!("Unknown config option in [logging]: {}", key));
+                }
+            }
+        }
+
+        warnings
     }
 
     /// Generate a default config file at the specified path

@@ -70,7 +70,7 @@ impl AppConstructor for App {
     fn new(args: Args) -> color_eyre::Result<Self> {
         let config_path = args.config.clone();
         let address = args.address.clone();
-        let mut config = Config::load(config_path)?;
+        let (mut config, _warnings) = Config::load(config_path)?;
 
         if let Some(addr) = address {
             config.mpd.address = addr;
@@ -123,6 +123,8 @@ impl App {
             key_binds,
             bit_perfect_enabled,
             force_update: true, // Force initial update
+            config_warnings: Vec::new(),
+            show_config_warnings_popup: false,
         })
     }
 }

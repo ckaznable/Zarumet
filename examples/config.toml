@@ -1,7 +1,7 @@
 [mpd]
 address = "localhost:6600"
 volume_increment = 5
-volume_increment_fine = 1
+olume_increment_fine = 1
 
 [colors]
 border = "#fae280"
