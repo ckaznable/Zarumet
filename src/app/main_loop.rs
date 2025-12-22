@@ -406,16 +406,7 @@ fn handle_pipewire_state_change(
     last_play_state: &mut Option<PlayState>,
     last_sample_rate: &mut Option<u32>,
 ) {
-    log::debug!(
-        "handle_pipewire_state_change called: bit_perfect_enabled={}, last_play_state={:?}, last_sample_rate={:?}",
-        bit_perfect_enabled,
-        last_play_state,
-        last_sample_rate
-    );
-    
     if !bit_perfect_enabled || !config.pipewire.is_available() {
-        log::debug!("handle_pipewire_state_change: early return (bit_perfect={}, available={})", 
-            bit_perfect_enabled, config.pipewire.is_available());
         return;
     }
 
@@ -448,8 +439,12 @@ fn handle_pipewire_state_change(
         }
         Some(PlayState::Paused) | Some(PlayState::Stopped) | None => {
             // Paused or stopped - reset to automatic rate
-            if *last_play_state == Some(PlayState::Playing) {
-                log::debug!("Resetting PipeWire sample rate (playback stopped)");
+            // Reset if we were playing, OR if last_play_state is None (unknown state after toggle)
+            if *last_play_state == Some(PlayState::Playing) || last_play_state.is_none() {
+                log::debug!(
+                    "Resetting PipeWire sample rate (playback stopped, last_state={:?})",
+                    last_play_state
+                );
                 let _ = crate::pipewire::reset_sample_rate();
             }
         }

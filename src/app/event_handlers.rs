@@ -81,7 +81,7 @@ impl EventHandlers for App {
                         // will properly detect state changes after toggle
                         self.last_play_state = None;
                         self.last_sample_rate = None;
-                        
+
                         #[cfg(target_os = "linux")]
                         if self.bit_perfect_enabled {
                             // Enabling - set sample rate if currently playing
@@ -100,10 +100,17 @@ impl EventHandlers for App {
                             }
                         } else {
                             // Disabling - reset PipeWire sample rate to automatic
-                            log::info!("Disabling bit-perfect, calling reset_sample_rate");
-                            match crate::pipewire::reset_sample_rate() {
-                                Ok(()) => log::info!("reset_sample_rate succeeded"),
-                                Err(e) => log::error!("reset_sample_rate failed: {}", e),
+                            if crate::pipewire::reset_sample_rate().is_ok() {
+                                // If currently playing, do a quick pause/unpause to force
+                                // PipeWire to renegotiate the sample rate immediately
+                                if let Some(ref status) = self.mpd_status
+                                    && status.state == mpd_client::responses::PlayState::Playing
+                                {
+                                    let _ =
+                                        client.command(mpd_client::commands::SetPause(true)).await;
+                                    let _ =
+                                        client.command(mpd_client::commands::Play::current()).await;
+                                }
                             }
                         }
                     }

@@ -4,7 +4,7 @@
 //! to match the currently playing song in MPD for bit-perfect playback.
 
 use crate::logging::log_pipewire_operation;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use pipewire::{
     context::ContextBox, main_loop::MainLoopBox, metadata::Metadata, properties::PropertiesBox,
     registry::GlobalObject, types::ObjectType,
@@ -45,9 +45,6 @@ static SUPPORTED_RATES_CACHE: OnceLock<Vec<u32>> = OnceLock::new();
 /// * `Ok(())` if the rate was set successfully
 /// * `Err(String)` with an error message if something went wrong
 pub fn set_sample_rate(rate: u32) -> Result<(), String> {
-    // Log call stack to find who's calling
-    log::info!("set_sample_rate called with rate={}", rate);
-    
     let result = set_sample_rate_inner(rate);
 
     // Log the operation result
@@ -137,14 +134,12 @@ fn set_sample_rate_inner(rate: u32) -> Result<(), String> {
     // When rate is 0, we delete the property (pass None) to reset to automatic
     // This triggers an immediate rate renegotiation, unlike setting to "0"
     if rate == 0 {
-        info!("Calling metadata.set_property with None to delete clock.force-rate");
         metadata.set_property(0, CLOCK_FORCE_RATE_KEY, None, None);
         debug!("Reset PipeWire sample rate to automatic");
     } else {
         let rate_str = rate.to_string();
-        info!("Calling metadata.set_property with value: {}", rate_str);
         metadata.set_property(0, CLOCK_FORCE_RATE_KEY, None, Some(&rate_str));
-        info!("Set PipeWire sample rate to {rate} Hz");
+        debug!("Set PipeWire sample rate to {rate} Hz");
     }
 
     // Sync to ensure the property change is flushed to the server
@@ -183,7 +178,6 @@ fn set_sample_rate_inner(rate: u32) -> Result<(), String> {
 /// to automatically select the best sample rate.
 #[cfg(target_os = "linux")]
 pub fn reset_sample_rate() -> Result<(), String> {
-    log::info!("reset_sample_rate: setting to 0 (automatic)");
     set_sample_rate(0)
 }
 
