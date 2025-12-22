@@ -113,7 +113,7 @@ fn render_config_warnings_popup(frame: &mut Frame, warnings: &[String], config: 
     // Calculate popup dimensions based on content
     let title = " Unknown Config Options ";
     let footer = "Press any key to close";
-    
+
     // Find max content width needed
     let max_content_width = warnings
         .iter()
@@ -126,10 +126,10 @@ fn render_config_warnings_popup(frame: &mut Frame, warnings: &[String], config: 
     // Popup width: content + padding (2 on each side) + borders (1 on each side)
     let inner_width = max_content_width + 4;
     let popup_width = (inner_width + 2).min(area.width as usize - 4) as u16;
-    
+
     // Available width for text inside the popup (subtract borders and padding)
     let text_width = popup_width.saturating_sub(4) as usize;
-    
+
     // Popup height: warnings + empty line after title + empty line before footer + footer + borders (2)
     let popup_height = (warnings.len() + 5).min(area.height as usize - 4) as u16;
 
@@ -169,7 +169,7 @@ fn render_config_warnings_popup(frame: &mut Frame, warnings: &[String], config: 
         } else {
             warning.clone()
         };
-        
+
         lines.push(Line::from(Span::styled(
             format!(" {}", display_warning),
             Style::default().fg(config.colors.song_title_color()),

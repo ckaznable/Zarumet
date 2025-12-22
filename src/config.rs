@@ -370,7 +370,10 @@ fn format_unknown_warning(section: &str, key: &str, suggestion: Option<&str>) ->
         }
     } else {
         match suggestion {
-            Some(s) => format!("Unknown option in {}: {} (did you mean: {}?)", section, key, s),
+            Some(s) => format!(
+                "Unknown option in {}: {} (did you mean: {}?)",
+                section, key, s
+            ),
             None => format!("Unknown option in {}: {}", section, key),
         }
     }
