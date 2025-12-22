@@ -89,8 +89,13 @@ impl App {
         // Build enhanced key maps from config
         let (global_map, queue_map, tracks_map, albums_map, sequential_bindings) =
             config.binds.build_enhanced_key_maps();
-        let key_binds =
-            KeyBinds::new_with_sequential(global_map, queue_map, tracks_map, albums_map, sequential_bindings);
+        let key_binds = KeyBinds::new_with_sequential(
+            global_map,
+            queue_map,
+            tracks_map,
+            albums_map,
+            sequential_bindings,
+        );
 
         // Determine bit-perfect state: CLI flag takes priority, then saved state
         let bit_perfect_enabled = match args.bit_perfect {

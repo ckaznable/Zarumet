@@ -1149,10 +1149,10 @@ impl App {
                             .await
                         {
                             error!("Error adding song to queue: {}", e);
-                        } else if queue_was_empty {
-                            if let Err(e) = client.command(commands::Play::current()).await {
-                                error!("Error starting playback: {}", e);
-                            }
+                        } else if queue_was_empty
+                            && let Err(e) = client.command(commands::Play::current()).await
+                        {
+                            error!("Error starting playback: {}", e);
                         }
                     }
                 }
@@ -1173,7 +1173,9 @@ impl App {
             // Add the specific song to queue
             let queue_was_empty = self.queue.is_empty();
             if let Err(e) = client
-                .command(commands::Add::uri(selected_song.file_path.to_str().unwrap()))
+                .command(commands::Add::uri(
+                    selected_song.file_path.to_str().unwrap(),
+                ))
                 .await
             {
                 error!("Error adding song to queue: {}", e);
