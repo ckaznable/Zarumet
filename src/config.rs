@@ -299,6 +299,83 @@ pub struct ColorsConfig {
     pub track_duration: String,
 }
 
+/// Calculate Levenshtein distance between two strings
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let a_len = a_chars.len();
+    let b_len = b_chars.len();
+
+    if a_len == 0 {
+        return b_len;
+    }
+    if b_len == 0 {
+        return a_len;
+    }
+
+    // Use two rows instead of full matrix for memory efficiency
+    let mut prev_row: Vec<usize> = (0..=b_len).collect();
+    let mut curr_row: Vec<usize> = vec![0; b_len + 1];
+
+    for (i, a_char) in a_chars.iter().enumerate() {
+        curr_row[0] = i + 1;
+
+        for (j, b_char) in b_chars.iter().enumerate() {
+            let cost = if a_char == b_char { 0 } else { 1 };
+            curr_row[j + 1] = (prev_row[j + 1] + 1)
+                .min(curr_row[j] + 1)
+                .min(prev_row[j] + cost);
+        }
+
+        std::mem::swap(&mut prev_row, &mut curr_row);
+    }
+
+    prev_row[b_len]
+}
+
+/// Find the most similar string from a list of candidates
+fn find_similar(unknown: &str, candidates: &[&str]) -> Option<String> {
+    let unknown_lower = unknown.to_lowercase();
+
+    // Find the best match based on Levenshtein distance
+    let mut best_match: Option<(&str, usize)> = None;
+
+    for &candidate in candidates {
+        let distance = levenshtein_distance(&unknown_lower, &candidate.to_lowercase());
+
+        // Only suggest if the distance is reasonable (less than half the length of the longer string)
+        let max_len = unknown.len().max(candidate.len());
+        let threshold = (max_len / 2).max(3); // At least 3 edits allowed
+
+        if distance <= threshold {
+            if let Some((_, best_distance)) = best_match {
+                if distance < best_distance {
+                    best_match = Some((candidate, distance));
+                }
+            } else {
+                best_match = Some((candidate, distance));
+            }
+        }
+    }
+
+    best_match.map(|(s, _)| s.to_string())
+}
+
+/// Format an unknown config warning with optional "did you mean" suggestion
+fn format_unknown_warning(section: &str, key: &str, suggestion: Option<&str>) -> String {
+    if section == "section" {
+        match suggestion {
+            Some(s) => format!("Unknown config section: [{}] (did you mean: [{}]?)", key, s),
+            None => format!("Unknown config section: [{}]", key),
+        }
+    } else {
+        match suggestion {
+            Some(s) => format!("Unknown option in {}: {} (did you mean: {}?)", section, key, s),
+            None => format!("Unknown option in {}: {}", section, key),
+        }
+    }
+}
+
 impl Config {
     /// Returns the default config file path based on the platform:
     /// - Linux: ~/.config/zarumet/config.toml (XDG_CONFIG_HOME)
@@ -452,7 +529,9 @@ impl Config {
         // Check top-level sections
         for key in table.keys() {
             if !KNOWN_SECTIONS.contains(&key.as_str()) {
-                warnings.push(format!("Unknown config section: [{}]", key));
+                let suggestion = find_similar(key, KNOWN_SECTIONS);
+                let msg = format_unknown_warning("section", key, suggestion.as_deref());
+                warnings.push(msg);
             }
         }
 
@@ -460,7 +539,9 @@ impl Config {
         if let Some(toml::Value::Table(mpd)) = table.get("mpd") {
             for key in mpd.keys() {
                 if !KNOWN_MPD_FIELDS.contains(&key.as_str()) {
-                    warnings.push(format!("Unknown config option in [mpd]: {}", key));
+                    let suggestion = find_similar(key, KNOWN_MPD_FIELDS);
+                    let msg = format_unknown_warning("[mpd]", key, suggestion.as_deref());
+                    warnings.push(msg);
                 }
             }
         }
@@ -468,7 +549,9 @@ impl Config {
         if let Some(toml::Value::Table(colors)) = table.get("colors") {
             for key in colors.keys() {
                 if !KNOWN_COLORS_FIELDS.contains(&key.as_str()) {
-                    warnings.push(format!("Unknown config option in [colors]: {}", key));
+                    let suggestion = find_similar(key, KNOWN_COLORS_FIELDS);
+                    let msg = format_unknown_warning("[colors]", key, suggestion.as_deref());
+                    warnings.push(msg);
                 }
             }
         }
@@ -476,7 +559,9 @@ impl Config {
         if let Some(toml::Value::Table(binds)) = table.get("binds") {
             for key in binds.keys() {
                 if !KNOWN_BINDS_FIELDS.contains(&key.as_str()) {
-                    warnings.push(format!("Unknown config option in [binds]: {}", key));
+                    let suggestion = find_similar(key, KNOWN_BINDS_FIELDS);
+                    let msg = format_unknown_warning("[binds]", key, suggestion.as_deref());
+                    warnings.push(msg);
                 }
             }
         }
@@ -484,7 +569,9 @@ impl Config {
         if let Some(toml::Value::Table(pipewire)) = table.get("pipewire") {
             for key in pipewire.keys() {
                 if !KNOWN_PIPEWIRE_FIELDS.contains(&key.as_str()) {
-                    warnings.push(format!("Unknown config option in [pipewire]: {}", key));
+                    let suggestion = find_similar(key, KNOWN_PIPEWIRE_FIELDS);
+                    let msg = format_unknown_warning("[pipewire]", key, suggestion.as_deref());
+                    warnings.push(msg);
                 }
             }
         }
@@ -492,7 +579,9 @@ impl Config {
         if let Some(toml::Value::Table(logging)) = table.get("logging") {
             for key in logging.keys() {
                 if !KNOWN_LOGGING_FIELDS.contains(&key.as_str()) {
-                    warnings.push(format!("Unknown config option in [logging]: {}", key));
+                    let suggestion = find_similar(key, KNOWN_LOGGING_FIELDS);
+                    let msg = format_unknown_warning("[logging]", key, suggestion.as_deref());
+                    warnings.push(msg);
                 }
             }
         }

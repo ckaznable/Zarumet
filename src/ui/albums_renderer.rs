@@ -36,6 +36,7 @@ pub fn render_albums_mode(
     mpd_status: &Option<mpd_client::responses::Status>,
     menu_mode: &MenuMode,
     bit_perfect_enabled: bool,
+    skip_image_render: bool,
 ) {
     // Same layout as tracks mode but for albums
     // Split area vertically: top section, middle section, bottom section
@@ -236,7 +237,7 @@ pub fn render_albums_mode(
     let image_area = right_vertical_chunks[0];
 
     // Render image or placeholder
-    render_image_widget(frame, protocol, image_area);
+    render_image_widget(frame, protocol, image_area, skip_image_render);
 
     // Render the song information
     let song_widget = create_song_widget(current_song, config);
