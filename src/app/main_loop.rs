@@ -156,6 +156,14 @@ impl AppMainLoop for App {
             tokio::time::interval(Duration::from_millis(PROGRESS_UPDATE_INTERVAL_MS));
         tokio::pin!(progress_interval);
 
+        // Set up signal handlers for graceful shutdown (Unix only)
+        #[cfg(unix)]
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .expect("Failed to set up SIGINT handler");
+        #[cfg(unix)]
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to set up SIGTERM handler");
+
         log::info!("Entering event-driven main loop");
 
         while self.running {
@@ -302,10 +310,29 @@ impl AppMainLoop for App {
                         }
                     }
                 }
+
+                // Unix signal handlers for graceful shutdown
+                _ = sigint.recv() => {
+                    log::info!("Received SIGINT, shutting down gracefully");
+                    self.quit();
+                }
+
+                _ = sigterm.recv() => {
+                    log::info!("Received SIGTERM, shutting down gracefully");
+                    self.quit();
+                }
             }
         }
 
         log::info!("Exiting main loop");
+
+        // Reset PipeWire sample rate on exit
+        #[cfg(target_os = "linux")]
+        if self.bit_perfect_enabled && self.config.pipewire.is_available() {
+            log::debug!("Resetting PipeWire sample rate on exit");
+            let _ = crate::pipewire::reset_sample_rate();
+        }
+
         Ok(())
     }
 }
