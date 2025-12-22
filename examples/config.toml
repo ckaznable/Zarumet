@@ -117,7 +117,7 @@ toggle_album_expansion = [
     "l",
     "right",
 ]
-add_song_to_queue = [
+add_album_to_queue = [
     "a",
     "enter",
 ]

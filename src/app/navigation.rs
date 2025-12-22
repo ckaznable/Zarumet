@@ -69,16 +69,28 @@ impl Navigation for App {
                 }
             }
             MPDAction::PlaySelected => {
-                if let Some(selected) = self.queue_list_state.selected()
-                    && selected < self.queue.len()
-                {
-                    // Play the song at the selected position in the queue
-                    let song_position: mpd_client::commands::SongPosition = selected.into();
-                    if let Err(e) = client
-                        .command(mpd_client::commands::Play::song(song_position))
-                        .await
-                    {
-                        error!("Error playing selected song: {}", e);
+                match self.menu_mode {
+                    MenuMode::Queue => {
+                        // Queue mode: play the selected song
+                        if let Some(selected) = self.queue_list_state.selected()
+                            && selected < self.queue.len()
+                        {
+                            let song_position: mpd_client::commands::SongPosition = selected.into();
+                            if let Err(e) = client
+                                .command(mpd_client::commands::Play::song(song_position))
+                                .await
+                            {
+                                error!("Error playing selected song: {}", e);
+                            }
+                        }
+                    }
+                    MenuMode::Albums => {
+                        // Albums mode: add selected song to queue (AlbumTracks panel)
+                        // Note: In AlbumList panel, binds.rs maps this to SwitchPanelRight
+                        self.handle_add_song_in_album_view(client).await?;
+                    }
+                    MenuMode::Tracks => {
+                        // Tracks mode: handled via ToggleAlbumExpansion in binds.rs
                     }
                 }
             }
@@ -372,7 +384,29 @@ impl Navigation for App {
                 self.handle_album_toggle(client).await?;
             }
             MPDAction::AddSongToQueue => {
-                self.handle_add_to_queue(client).await?;
+                match self.menu_mode {
+                    MenuMode::Albums => {
+                        // Albums mode: context-aware add
+                        match self.panel_focus {
+                            PanelFocus::AlbumTracks => {
+                                // In tracks panel: add selected song
+                                self.handle_add_song_in_album_view(client).await?;
+                            }
+                            PanelFocus::AlbumList => {
+                                // In album list panel: add entire album
+                                self.handle_add_album_in_album_view(client).await?;
+                            }
+                            _ => {}
+                        }
+                    }
+                    MenuMode::Tracks => {
+                        // Tracks mode: add album to queue (existing behavior)
+                        self.handle_add_to_queue(client).await?;
+                    }
+                    MenuMode::Queue => {
+                        // Queue mode: no action
+                    }
+                }
             }
             MPDAction::CycleModeLeft => {
                 // Cycle modes left: Queue -> Albums -> Tracks -> Queue
@@ -1078,6 +1112,56 @@ impl App {
             // Add all songs from the album to queue
             let queue_was_empty = self.queue.is_empty();
             for song in &selected_album.tracks {
+                if let Err(e) = client
+                    .command(commands::Add::uri(song.file_path.to_str().unwrap()))
+                    .await
+                {
+                    error!("Error adding song to queue: {}", e);
+                }
+            }
+            // Start playback if queue was empty
+            if queue_was_empty && let Err(e) = client.command(commands::Play::current()).await {
+                error!("Error starting playback: {}", e);
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle adding a specific song to queue in Albums mode (L key in songs pane)
+    async fn handle_add_song_in_album_view(&mut self, client: &Client) -> color_eyre::Result<()> {
+        if let (Some(library), Some(selected_album_index)) =
+            (&self.library, self.artist_list_state.selected())
+            && let Some((_, album)) = library.all_albums.get(selected_album_index)
+            && let Some(selected_track_index) = self.album_display_list_state.selected()
+            && selected_track_index < album.tracks.len()
+            && let Some(selected_song) = album.tracks.get(selected_track_index)
+        {
+            // Add the specific song to queue
+            let queue_was_empty = self.queue.is_empty();
+            if let Err(e) = client
+                .command(commands::Add::uri(selected_song.file_path.to_str().unwrap()))
+                .await
+            {
+                error!("Error adding song to queue: {}", e);
+            } else if queue_was_empty {
+                // Start playback if queue was empty
+                if let Err(e) = client.command(commands::Play::current()).await {
+                    error!("Error starting playback: {}", e);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle adding an entire album to queue in Albums mode (A/Enter key in albums pane)
+    async fn handle_add_album_in_album_view(&mut self, client: &Client) -> color_eyre::Result<()> {
+        if let (Some(library), Some(selected_album_index)) =
+            (&self.library, self.artist_list_state.selected())
+            && let Some((_, album)) = library.all_albums.get(selected_album_index)
+        {
+            // Add all songs from the album to queue
+            let queue_was_empty = self.queue.is_empty();
+            for song in &album.tracks {
                 if let Err(e) = client
                     .command(commands::Add::uri(song.file_path.to_str().unwrap()))
                     .await

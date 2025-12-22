@@ -231,8 +231,8 @@ pub struct BindsConfig {
     pub switch_panel_right: Vec<String>,
     #[serde(default = "BindsConfig::default_toggle_album_expansion")]
     pub toggle_album_expansion: Vec<String>,
-    #[serde(default = "BindsConfig::default_add_song_to_queue")]
-    pub add_song_to_queue: Vec<String>,
+    #[serde(default = "BindsConfig::default_add_album_to_queue")]
+    pub add_album_to_queue: Vec<String>,
     #[serde(default = "BindsConfig::default_scroll_up_big")]
     pub scroll_up_big: Vec<String>,
     #[serde(default = "BindsConfig::default_scroll_down_big")]
@@ -653,7 +653,7 @@ impl BindsConfig {
     fn default_toggle_album_expansion() -> Vec<String> {
         vec!["l".to_string(), "right".to_string()]
     }
-    fn default_add_song_to_queue() -> Vec<String> {
+    fn default_add_album_to_queue() -> Vec<String> {
         vec!["a".to_string(), "enter".to_string()]
     }
     fn default_scroll_up_big() -> Vec<String> {
@@ -778,6 +778,10 @@ impl BindsConfig {
             (crossterm::event::KeyModifiers, crossterm::event::KeyCode),
             crate::app::mpd_handler::MPDAction,
         >,
+        HashMap<
+            (crossterm::event::KeyModifiers, crossterm::event::KeyCode),
+            crate::app::mpd_handler::MPDAction,
+        >,
         Vec<crate::binds::SequentialKeyBinding>,
     ) {
         self.build_enhanced_key_maps_internal()
@@ -800,11 +804,16 @@ impl BindsConfig {
             (crossterm::event::KeyModifiers, crossterm::event::KeyCode),
             crate::app::mpd_handler::MPDAction,
         >,
+        HashMap<
+            (crossterm::event::KeyModifiers, crossterm::event::KeyCode),
+            crate::app::mpd_handler::MPDAction,
+        >,
         Vec<crate::binds::SequentialKeyBinding>,
     ) {
         let mut global_map = HashMap::new();
         let mut queue_map = HashMap::new();
         let mut tracks_map = HashMap::new();
+        let mut albums_map = HashMap::new();
         let mut sequential_bindings = Vec::new();
 
         // Global bindings (always available)
@@ -816,7 +825,16 @@ impl BindsConfig {
         // Tracks mode specific bindings
         self.add_enhanced_tracks_bindings(&mut tracks_map, &mut sequential_bindings);
 
-        (global_map, queue_map, tracks_map, sequential_bindings)
+        // Albums mode specific bindings
+        self.add_enhanced_albums_bindings(&mut albums_map, &mut sequential_bindings);
+
+        (
+            global_map,
+            queue_map,
+            tracks_map,
+            albums_map,
+            sequential_bindings,
+        )
     }
 
     fn add_enhanced_global_bindings(
@@ -1109,7 +1127,7 @@ impl BindsConfig {
             sequential_bindings,
         );
         self.add_enhanced_binding_for_action(
-            &self.add_song_to_queue,
+            &self.add_album_to_queue,
             crate::app::mpd_handler::MPDAction::AddSongToQueue,
             single_map,
             sequential_bindings,
@@ -1126,6 +1144,88 @@ impl BindsConfig {
             single_map,
             sequential_bindings,
         );
+        self.add_enhanced_binding_for_action(
+            &self.go_to_top,
+            crate::app::mpd_handler::MPDAction::GoToTop,
+            single_map,
+            sequential_bindings,
+        );
+        self.add_enhanced_binding_for_action(
+            &self.go_to_bottom,
+            crate::app::mpd_handler::MPDAction::GoToBottom,
+            single_map,
+            sequential_bindings,
+        );
+    }
+
+    fn add_enhanced_albums_bindings(
+        &self,
+        single_map: &mut HashMap<
+            (crossterm::event::KeyModifiers, crossterm::event::KeyCode),
+            crate::app::mpd_handler::MPDAction,
+        >,
+        sequential_bindings: &mut Vec<crate::binds::SequentialKeyBinding>,
+    ) {
+        // Albums mode specific bindings - copy from tracks but with album-specific actions
+        // Panel navigation
+        self.add_enhanced_binding_for_action(
+            &self.switch_panel_left,
+            crate::app::mpd_handler::MPDAction::SwitchPanelLeft,
+            single_map,
+            sequential_bindings,
+        );
+        self.add_enhanced_binding_for_action(
+            &self.switch_panel_right,
+            crate::app::mpd_handler::MPDAction::SwitchPanelRight,
+            single_map,
+            sequential_bindings,
+        );
+
+        // Navigation
+        self.add_enhanced_binding_for_action(
+            &self.scroll_up,
+            crate::app::mpd_handler::MPDAction::NavigateUp,
+            single_map,
+            sequential_bindings,
+        );
+        self.add_enhanced_binding_for_action(
+            &self.scroll_down,
+            crate::app::mpd_handler::MPDAction::NavigateDown,
+            single_map,
+            sequential_bindings,
+        );
+
+        // PlaySelected - in AlbumTracks panel adds song to queue, in AlbumList switches panel
+        self.add_enhanced_binding_for_action(
+            &self.play_selected,
+            crate::app::mpd_handler::MPDAction::PlaySelected,
+            single_map,
+            sequential_bindings,
+        );
+
+        // AddSongToQueue - adds entire album to queue (A/Enter keys)
+        self.add_enhanced_binding_for_action(
+            &self.add_album_to_queue,
+            crate::app::mpd_handler::MPDAction::AddSongToQueue,
+            single_map,
+            sequential_bindings,
+        );
+
+        // Scrolling
+        self.add_enhanced_binding_for_action(
+            &self.scroll_up_big,
+            crate::app::mpd_handler::MPDAction::ScrollUp,
+            single_map,
+            sequential_bindings,
+        );
+        self.add_enhanced_binding_for_action(
+            &self.scroll_down_big,
+            crate::app::mpd_handler::MPDAction::ScrollDown,
+            single_map,
+            sequential_bindings,
+        );
+
+        // Jump to top/bottom
         self.add_enhanced_binding_for_action(
             &self.go_to_top,
             crate::app::mpd_handler::MPDAction::GoToTop,
@@ -1173,7 +1273,7 @@ impl Default for BindsConfig {
             switch_panel_left: Self::default_switch_panel_left(),
             switch_panel_right: Self::default_switch_panel_right(),
             toggle_album_expansion: Self::default_toggle_album_expansion(),
-            add_song_to_queue: Self::default_add_song_to_queue(),
+            add_album_to_queue: Self::default_add_album_to_queue(),
             scroll_up_big: Self::default_scroll_up_big(),
             scroll_down_big: Self::default_scroll_down_big(),
             scroll_up: Self::default_scroll_up_enhanced(),

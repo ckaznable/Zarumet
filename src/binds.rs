@@ -28,6 +28,7 @@ pub struct KeyBinds {
     global_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
     queue_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
     tracks_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
+    albums_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
     sequential_bindings: Vec<SequentialKeyBinding>,
     current_state: KeyState,
     default_timeout: Duration,
@@ -39,12 +40,14 @@ impl KeyBinds {
         global_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
         queue_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
         tracks_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
+        albums_map: HashMap<(KeyModifiers, KeyCode), MPDAction>,
         sequential_bindings: Vec<SequentialKeyBinding>,
     ) -> Self {
         Self {
             global_map,
             queue_map,
             tracks_map,
+            albums_map,
             sequential_bindings,
             current_state: KeyState::Idle,
             default_timeout: Duration::from_millis(1000),
@@ -99,7 +102,25 @@ impl KeyBinds {
                 }
             }
             MenuMode::Albums => {
-                // Reuse tracks_map for Albums mode with panel-specific logic
+                // Check albums-specific bindings first
+                if let Some(action) = self.albums_map.get(&key_tuple) {
+                    // Handle panel-specific logic for albums mode
+                    match (action, panel_focus) {
+                        // PlaySelected: In AlbumTracks panel adds song, in AlbumList switches panel
+                        (MPDAction::PlaySelected, PanelFocus::AlbumTracks) => {
+                            return Some(MPDAction::PlaySelected);
+                        }
+                        (MPDAction::PlaySelected, PanelFocus::AlbumList) => {
+                            return Some(MPDAction::SwitchPanelRight);
+                        }
+                        // AddSongToQueue: In AlbumTracks adds song, in AlbumList adds album
+                        (MPDAction::AddSongToQueue, _) => {
+                            return Some(MPDAction::AddSongToQueue);
+                        }
+                        _ => return Some(action.clone()),
+                    }
+                }
+                // Fall back to tracks_map for navigation bindings
                 if let Some(action) = self.tracks_map.get(&key_tuple) {
                     match (action, panel_focus) {
                         (MPDAction::SwitchPanelRight, PanelFocus::AlbumList) => {
@@ -107,6 +128,10 @@ impl KeyBinds {
                         }
                         (MPDAction::SwitchPanelRight, PanelFocus::AlbumTracks) => {
                             // Already at rightmost panel, no action
+                            return None;
+                        }
+                        // Skip album expansion actions in albums mode
+                        (MPDAction::ToggleAlbumExpansion, _) => {
                             return None;
                         }
                         _ => return Some(action.clone()),
