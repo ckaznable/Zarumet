@@ -224,10 +224,21 @@ impl LazyLibrary {
         log::info!("Initializing lazy library (loading artist names only)...");
 
         // Get all unique album artists using the List command
-        let album_artists_list = client
-            .command(commands::List::new(Tag::AlbumArtist))
-            .await
-            .map_err(|e| color_eyre::eyre::eyre!("Failed to list album artists: {}", e))?;
+        let album_artists_list = match client.command(commands::List::new(Tag::AlbumArtist)).await {
+            Ok(list) => list,
+            Err(e) => {
+                log::error!("MPD List command failed for AlbumArtist tag: {}", e);
+                log::error!("This usually indicates:");
+                log::error!("  - MPD database corruption or inconsistency");
+                log::error!("  - Permission issues with music directory");
+                log::error!("  - Network/protocol issues with MPD server");
+                log::error!("  - Missing or invalid AlbumArtist tags in music files");
+                return Err(color_eyre::eyre::eyre!(
+                    "Failed to list album artists: {}",
+                    e
+                ));
+            }
+        };
 
         let mut artist_names: Vec<String> = album_artists_list
             .into_iter()
@@ -295,8 +306,15 @@ impl LazyLibrary {
             Err(e) => {
                 // Revert to NotLoaded on error
                 self.artists[artist_index].albums = ArtistData::NotLoaded;
+                log::error!("Failed to load songs for artist '{}': {}", artist_name, e);
+                log::error!("This may indicate:");
+                log::error!("  - Corrupted MPD database entries for this artist");
+                log::error!("  - Missing or inaccessible music files");
+                log::error!("  - Permission issues with music directory");
+                log::error!("  - Network/protocol issues with MPD server");
                 return Err(color_eyre::eyre::eyre!(
-                    "Failed to find songs for artist: {}",
+                    "Failed to find songs for artist '{}': {}",
+                    artist_name,
                     e
                 ));
             }

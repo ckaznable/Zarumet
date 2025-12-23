@@ -94,19 +94,33 @@ impl AppMainLoop for App {
         }
 
         // Load library (lazy - only artist names initially)
-        self.library = Some(crate::song::LazyLibrary::init(&client).await?);
+        match crate::song::LazyLibrary::init(&client).await {
+            Ok(library) => {
+                self.library = Some(library);
 
-        // Initialize artist selection if library has artists
-        if let Some(ref library) = self.library
-            && !library.artists.is_empty()
-        {
-            self.artist_list_state.select(Some(0));
+                // Initialize artist selection if library has artists
+                if let Some(ref library) = self.library
+                    && !library.artists.is_empty()
+                {
+                    self.artist_list_state.select(Some(0));
 
-            // Load the first artist's albums immediately for better UX
-            if let Some(ref mut lib) = self.library
-                && let Err(e) = lib.load_artist(&client, 0).await
-            {
-                log::warn!("Failed to load first artist: {}", e);
+                    // Load the first artist's albums immediately for better UX
+                    if let Some(ref mut lib) = self.library
+                        && let Err(e) = lib.load_artist(&client, 0).await
+                    {
+                        log::warn!("Failed to load first artist: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to initialize music library: {}", e);
+                log::error!(
+                    "This may be due to MPD protocol issues, corrupted database, or permission problems."
+                );
+                log::error!(
+                    "Zarumet will continue running but library features will be unavailable."
+                );
+                self.library = None;
             }
         }
 
