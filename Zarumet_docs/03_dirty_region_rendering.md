@@ -363,6 +363,16 @@ fn update_volume(&mut self, new_volume: u8) {
 }
 ```
 
+**Internal state changes also need dirty marking** — not just data fetched from MPD:
+
+```rust
+// Bug: Toggle doesn't update icon!
+MPDAction::ToggleBitPerfect => {
+    self.bit_perfect_enabled = !self.bit_perfect_enabled;
+    // Missing: self.dirty.mark_status();
+}
+```
+
 ### 2. Over-Marking
 
 ```rust
