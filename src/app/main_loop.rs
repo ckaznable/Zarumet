@@ -14,6 +14,9 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 
 use super::App;
+use super::cover_cache::{
+    SharedCoverCache, find_current_index, get_prefetch_targets, new_shared_cache,
+};
 use crate::app::{event_handlers::EventHandlers, mpd_updates::MPDUpdates};
 use crate::ui::Protocol;
 
@@ -144,11 +147,18 @@ impl AppMainLoop for App {
         // Channel for cover art loading results
         let (cover_tx, mut cover_rx) = mpsc::channel::<CoverArtMessage>(1);
 
+        // Create shared cover art cache
+        let cover_cache = new_shared_cache();
+
         // Load initial cover art in background
         if let Some(ref song) = self.current_song {
             let file_path = song.file_path.clone();
-            spawn_cover_art_loader(&client, file_path, cover_tx.clone());
+            spawn_cover_art_loader(&client, file_path, cover_tx.clone(), cover_cache.clone());
         }
+
+        // Prefetch cover art for adjacent queue items
+        let current_idx = find_current_index(&self.queue, &self.current_song);
+        spawn_prefetch_loaders(&client, &self.queue, current_idx, cover_cache.clone());
 
         // Create protocol with no initial image (will be loaded async)
         let mut protocol = Protocol { image: None };
@@ -215,6 +225,10 @@ impl AppMainLoop for App {
                         cache.log_stats();
                     }
                 });
+
+                // Log cover art cache stats
+                let cache_guard = cover_cache.read().await;
+                cache_guard.log_stats();
             }
 
             // Event-driven loop using tokio::select!
@@ -234,9 +248,11 @@ impl AppMainLoop for App {
                             check_song_change(
                                 &mut current_song_file,
                                 &self.current_song,
+                                &self.queue,
                                 &client,
                                 &cover_tx,
                                 &mut protocol,
+                                cover_cache.clone(),
                             );
                         }
                     }
@@ -295,9 +311,11 @@ impl AppMainLoop for App {
                             check_song_change(
                                 &mut current_song_file,
                                 &self.current_song,
+                                &self.queue,
                                 &client,
                                 &cover_tx,
                                 &mut protocol,
+                                cover_cache.clone(),
                             );
 
                             // Handle PipeWire sample rate changes
@@ -403,12 +421,42 @@ impl AppMainLoop for App {
     }
 }
 
-/// Spawn a background task to load cover art
-fn spawn_cover_art_loader(client: &Client, file_path: PathBuf, tx: mpsc::Sender<CoverArtMessage>) {
+/// Spawn a background task to load cover art with cache support
+fn spawn_cover_art_loader(
+    client: &Client,
+    file_path: PathBuf,
+    tx: mpsc::Sender<CoverArtMessage>,
+    cache: SharedCoverCache,
+) {
     let client = client.clone();
     let file_path_clone = file_path.clone();
 
     tokio::spawn(async move {
+        // Check cache first
+        {
+            let mut cache_guard = cache.write().await;
+            if let Some(cached) = cache_guard.get(&file_path_clone) {
+                log::debug!("Cover art cache hit: {:?}", file_path_clone);
+                let _ = tx
+                    .send(CoverArtMessage::Loaded(
+                        cached.data.clone(),
+                        file_path_clone,
+                    ))
+                    .await;
+                return;
+            }
+
+            // Check if already being fetched
+            if cache_guard.is_pending(&file_path_clone) {
+                log::debug!("Cover art already pending: {:?}", file_path_clone);
+                return;
+            }
+
+            // Mark as pending
+            cache_guard.mark_pending(file_path_clone.clone());
+        }
+
+        // Fetch from MPD
         let uri = file_path_clone.to_string_lossy();
         let result = client.album_art(&uri).await;
 
@@ -421,6 +469,12 @@ fn spawn_cover_art_loader(client: &Client, file_path: PathBuf, tx: mpsc::Sender<
             }
         };
 
+        // Store in cache
+        {
+            let mut cache_guard = cache.write().await;
+            cache_guard.insert(file_path_clone.clone(), data.clone());
+        }
+
         // Send result back (ignore error if receiver dropped)
         let _ = tx
             .send(CoverArtMessage::Loaded(data, file_path_clone))
@@ -428,13 +482,61 @@ fn spawn_cover_art_loader(client: &Client, file_path: PathBuf, tx: mpsc::Sender<
     });
 }
 
+/// Spawn background tasks to prefetch cover art for adjacent queue items
+fn spawn_prefetch_loaders(
+    client: &Client,
+    queue: &[crate::song::SongInfo],
+    current_index: Option<usize>,
+    cache: SharedCoverCache,
+) {
+    let targets = get_prefetch_targets(queue, current_index);
+
+    for file_path in targets {
+        let client = client.clone();
+        let cache = cache.clone();
+
+        tokio::spawn(async move {
+            // Check if already cached or pending
+            {
+                let mut cache_guard = cache.write().await;
+                if cache_guard.contains(&file_path) || cache_guard.is_pending(&file_path) {
+                    return;
+                }
+                cache_guard.mark_pending(file_path.clone());
+            }
+
+            // Fetch from MPD
+            let uri = file_path.to_string_lossy();
+            let result = client.album_art(&uri).await;
+
+            let data = match result {
+                Ok(Some((raw_data, _mime))) => Some(raw_data.to_vec()),
+                Ok(None) => None,
+                Err(e) => {
+                    log::debug!("Failed to prefetch cover art: {}", e);
+                    None
+                }
+            };
+
+            // Store in cache (no need to send to channel - it's a prefetch)
+            {
+                let mut cache_guard = cache.write().await;
+                cache_guard.insert(file_path.clone(), data);
+                log::debug!("Prefetched cover art: {:?}", file_path);
+            }
+        });
+    }
+}
+
 /// Check if the song changed and trigger cover art loading if needed
 fn check_song_change(
     current_song_file: &mut Option<PathBuf>,
     current_song: &Option<crate::song::SongInfo>,
+    queue: &[crate::song::SongInfo],
     client: &Client,
     cover_tx: &mpsc::Sender<CoverArtMessage>,
     protocol: &mut crate::ui::Protocol,
+    cache: SharedCoverCache,
 ) {
     let new_song_file: Option<PathBuf> = current_song.as_ref().map(|song| song.file_path.clone());
 
@@ -450,10 +552,14 @@ fn check_song_change(
             protocol.image = None;
         }
 
-        // Start loading cover art in background
+        // Start loading cover art in background (uses cache internally)
         if let Some(ref file_path) = new_song_file {
-            spawn_cover_art_loader(client, file_path.clone(), cover_tx.clone());
+            spawn_cover_art_loader(client, file_path.clone(), cover_tx.clone(), cache.clone());
         }
+
+        // Prefetch adjacent queue items
+        let current_idx = find_current_index(queue, current_song);
+        spawn_prefetch_loaders(client, queue, current_idx, cache);
 
         *current_song_file = new_song_file;
     }

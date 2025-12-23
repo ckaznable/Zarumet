@@ -7,6 +7,7 @@ use ratatui::{
 
 use crate::config::Config;
 use crate::song::SongInfo;
+use crate::ui::RENDER_CACHE;
 
 pub fn create_queue_widget<'a>(
     queue: &[SongInfo],
@@ -54,16 +55,14 @@ pub fn create_queue_widget<'a>(
                 // Split remaining width into 3 equal parts for title, artist, album
                 let field_width = remaining_width / 3;
 
-                // Format duration if available
-                let duration_str = match song.duration {
+                // Format duration if available using cache
+                let duration_str = RENDER_CACHE.with(|cache| match song.duration {
                     Some(duration) => {
-                        let total_seconds = duration.as_secs();
-                        let minutes = total_seconds / 60;
-                        let seconds = total_seconds % 60;
-                        format!("{}:{:02}", minutes, seconds)
+                        let mut cache = cache.borrow_mut();
+                        cache.durations.format_short(duration.as_secs()).to_owned()
                     }
-                    None => " (--:--)".to_string(),
-                };
+                    None => " (--:--)".to_owned(),
+                });
 
                 // Truncate each field to its allocated width using Unicode-aware width with caching
                 let field_width_max = field_width.max(8);
@@ -167,7 +166,10 @@ pub fn create_queue_widget<'a>(
 
                     if remaining_width > 0 {
                         // Add spaces to fill the remaining width with the selected background color
-                        spans.push(Span::styled(" ".repeat(remaining_width), border_color));
+                        let padding = RENDER_CACHE.with(|cache| {
+                            cache.borrow().fillers.spaces(remaining_width).to_owned()
+                        });
+                        spans.push(Span::styled(padding, border_color));
                     }
                 }
 

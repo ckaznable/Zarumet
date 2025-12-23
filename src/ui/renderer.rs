@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::config::Config;
 use crate::song::{LazyLibrary, SongInfo};
+use crate::ui::RENDER_CACHE;
 use crate::ui::menu::{MenuMode, PanelFocus};
 use crate::ui::utils::{DisplayItem, compute_album_display_list};
 use crate::ui::widgets::{
@@ -549,22 +550,15 @@ fn render_tracks_mode(
                                 .find(|a| a.name == *album_name)
                                 .unwrap();
 
-                            // Format total duration
-                            let duration_str = match album.total_duration() {
-                                Some(duration) => {
-                                    let total_seconds = duration.as_secs();
-                                    let hours = total_seconds / 3600;
-                                    let minutes = (total_seconds % 3600) / 60;
-                                    let seconds = total_seconds % 60;
-
-                                    if hours > 0 {
-                                        format!("{}:{}:{:02}", hours, minutes, seconds)
-                                    } else {
-                                        format!("{}:{:02}", minutes, seconds)
+                            // Format total duration using cache
+                            let duration_str =
+                                RENDER_CACHE.with(|cache| match album.total_duration() {
+                                    Some(duration) => {
+                                        let mut cache = cache.borrow_mut();
+                                        cache.durations.format_long(duration.as_secs()).to_owned()
                                     }
-                                }
-                                None => "--:--".to_string(),
-                            };
+                                    None => "--:--".to_owned(),
+                                });
 
                             // Calculate available width for filler (subtract album name width and duration width + spaces)
                             let available_width =
@@ -585,7 +579,13 @@ fn render_tracks_mode(
 
                             let filler_width =
                                 max_album_name_width.saturating_sub(truncated_album_name.width());
-                            let filler = "─".repeat(filler_width.max(0));
+                            let filler = RENDER_CACHE.with(|cache| {
+                                cache
+                                    .borrow()
+                                    .fillers
+                                    .dashes(filler_width.max(0))
+                                    .to_owned()
+                            });
                             let display_text =
                                 format!(" {}{}   {}", truncated_album_name, filler, duration_str);
 
@@ -595,15 +595,16 @@ fn render_tracks_mode(
                             ])
                         }
                         DisplayItem::Song(song_title, duration, _file_path) => {
-                            let song_duration_str = match duration {
+                            let song_duration_str = RENDER_CACHE.with(|cache| match duration {
                                 Some(duration) => {
-                                    let total_seconds = duration.as_secs();
-                                    let minutes = total_seconds / 60;
-                                    let seconds = total_seconds % 60;
-                                    format!("  {}:{:02}", minutes, seconds)
+                                    let mut cache = cache.borrow_mut();
+                                    format!(
+                                        "  {}",
+                                        cache.durations.format_short(duration.as_secs())
+                                    )
                                 }
-                                None => "  --:--".to_string(),
-                            };
+                                None => "  --:--".to_owned(),
+                            });
 
                             let available_width =
                                 left_horizontal_chunks[1].width.saturating_sub(4) as usize;
@@ -623,7 +624,13 @@ fn render_tracks_mode(
 
                             let filler_width =
                                 max_song_title_width.saturating_sub(truncated_song_title.width());
-                            let filler = " ".repeat(filler_width.max(0));
+                            let filler = RENDER_CACHE.with(|cache| {
+                                cache
+                                    .borrow()
+                                    .fillers
+                                    .spaces(filler_width.max(0))
+                                    .to_owned()
+                            });
 
                             let song_text = format!("   {}{}", truncated_song_title, filler,);
                             let mut spans = vec![Span::styled(

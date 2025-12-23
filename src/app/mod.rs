@@ -8,6 +8,7 @@ use ratatui::widgets::ListState;
 // Module declarations
 pub mod cli;
 pub mod constructor;
+pub mod cover_cache;
 pub mod event_handlers;
 pub mod main_loop;
 pub mod mpd_handler;

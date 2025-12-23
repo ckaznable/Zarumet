@@ -76,14 +76,6 @@ pub fn left_align_cached(cache: &mut WidthCache, s: &str, width: usize) -> Strin
     format!("{}{}", s, " ".repeat(padding))
 }
 
-/// Format duration as MM:SS
-pub fn format_duration(duration: std::time::Duration) -> String {
-    let total_seconds = duration.as_secs();
-    let minutes = total_seconds / 60;
-    let seconds = total_seconds % 60;
-    format!("{:02}:{:02}", minutes, seconds)
-}
-
 /// Helper function to center a rect within another rect
 pub fn center_area(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
     let [area] = Layout::horizontal([horizontal])

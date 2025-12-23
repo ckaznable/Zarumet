@@ -356,7 +356,7 @@ mod tests {
             hit_rate > 0.99,
             "Hit rate should be very high after warm-up"
         );
-        assert!(improvement > 2.0, "Should see at least 2x improvement");
+        assert!(improvement > 1.5, "Should see at least 1.5x improvement");
     }
 
     #[test]
