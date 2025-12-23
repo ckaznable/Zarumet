@@ -379,8 +379,6 @@ impl LazyLibrary {
         log::info!("Preloading all albums for Albums view (bulk)...");
         let start_time = std::time::Instant::now();
 
-        // Fetch ALL songs in the library at once using find with a filter that matches everything
-        // This is faster than per-artist queries and more reliable than listallinfo
         // Fetch ALL songs in the library at once using a filter that matches every song
         // This is faster than per-artist queries and more reliable than listallinfo.
         // We do this by requiring that the "file" tag exists:
