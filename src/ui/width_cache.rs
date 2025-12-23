@@ -130,8 +130,6 @@ impl WidthCache {
         self.entries.contains_key(s)
     }
 
-    /// Get the number of entries in the cache
-
     /// Check if the cache is empty
     #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
