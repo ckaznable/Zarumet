@@ -17,7 +17,9 @@ use super::App;
 use super::cover_cache::{
     SharedCoverCache, find_current_index, get_prefetch_targets, new_shared_cache,
 };
-use crate::app::{event_handlers::EventHandlers, mpd_updates::MPDUpdates};
+use crate::app::{
+    MessageType, StatusMessage, event_handlers::EventHandlers, mpd_updates::MPDUpdates,
+};
 use crate::ui::Protocol;
 
 /// Interval for progress bar updates when playing (in milliseconds)
@@ -208,6 +210,7 @@ impl AppMainLoop for App {
                         self.bit_perfect_enabled,
                         self.show_config_warnings_popup,
                         &self.config_warnings,
+                        &self.status_message,
                     )
                 })?;
 
@@ -226,6 +229,8 @@ impl AppMainLoop for App {
                 // Timeout occurred - need to clear the sequence indicator
                 self.dirty.mark_key_sequence();
             }
+
+            self.check_status_message_expiry();
 
             // Log width cache statistics periodically
             static CACHE_LOG_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -301,6 +306,89 @@ impl AppMainLoop for App {
                                 Subsystem::StoredPlaylist => {
                                     self.run_updates(&client).await?;
                                 }
+                                Subsystem::Update => {
+                                    if self.library_reload_pending {
+                                        log::info!("Database update completed, reloading library...");
+
+                                        // Now reload the music library from MPD
+                                        log::info!("Refreshing library...");
+                                        match crate::song::LazyLibrary::init(&client).await {
+                                            Ok(new_library) => {
+                                                log::info!("Library refreshed successfully");
+
+                                                self.library = Some(new_library);
+
+                                                // Try to restore artist selection by name
+                                                if let Some(prev_name) = self.pending_artist_index.take() {
+                                                    if let Some(ref mut library) = self.library {
+                                                        if let Some(new_idx) =
+                                                            library.artists.iter().position(|a| a.name == prev_name)
+                                                        {
+                                                            self.artist_list_state.select(Some(new_idx));
+                                                            // Load the restored artist's albums
+                                                            if let Err(e) = library.load_artist(&client, new_idx).await {
+                                                                log::warn!("Failed to load artist after refresh: {}", e);
+                                                            }
+                                                        } else if !library.artists.is_empty() {
+                                                            // Artist no longer exists, select first
+                                                            self.artist_list_state.select(Some(0));
+                                                            if let Err(e) = library.load_artist(&client, 0).await {
+                                                                log::warn!(
+                                                                    "Failed to load first artist after refresh: {}",
+                                                                    e
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                } else if let Some(ref mut library) = self.library {
+                                                    // No previous selection, select first if available
+                                                    if !library.artists.is_empty() {
+                                                        self.artist_list_state.select(Some(0));
+                                                        if let Err(e) = library.load_artist(&client, 0).await {
+                                                            log::warn!("Failed to load first artist after refresh: {}", e);
+                                                        }
+                                                    }
+                                                }
+
+                                                // Clear album selections since they may be stale
+                                                self.album_list_state.select(None);
+                                                self.album_display_list_state.select(None);
+                                                self.expanded_albums.clear();
+
+                                                // Mark library as dirty for re-render
+                                                self.dirty.mark_library();
+
+                                                // Show success message only if user initiated the update
+                                                if self.update_in_progress {
+                                                    self.set_status_message(StatusMessage {
+                                                        text: String::new(),
+                                                        created_at: std::time::Instant::now(),
+                                                        message_type: MessageType::UpdateSuccess,
+                                                    });
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!("Failed to refresh library: {}", e);
+
+                                                // Show error only if user initiated the update
+                                                if self.update_in_progress {
+                                                    self.set_status_message(StatusMessage {
+                                                        text: e.to_string(),
+                                                        created_at: std::time::Instant::now(),
+                                                        message_type: MessageType::UpdateError,
+                                                    });
+                                                }
+                                            }
+                                        }
+
+                                        self.run_updates(&client).await?;
+
+                                        self.library_reload_pending = false;
+                                        self.pending_artist_index = None;
+                                    } else {
+                                        log::debug!("Database update completed (external), ignoring");
+                                    }
+                                }
                                 // Database, output, sticker, etc. - typically don't affect current playback
                                 Subsystem::Database
                                 | Subsystem::Output
@@ -310,7 +398,6 @@ impl AppMainLoop for App {
                                 | Subsystem::Partition
                                 | Subsystem::Neighbor
                                 | Subsystem::Mount
-                                | Subsystem::Update
                                 | Subsystem::Other(_) => {
                                     // These don't typically require UI updates
                                     log::debug!("Ignoring subsystem change: {:?}", subsystem);

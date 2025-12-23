@@ -17,6 +17,20 @@ pub mod mpd_updates;
 pub mod navigation;
 pub mod terminal;
 
+#[derive(Debug, Clone)]
+pub struct StatusMessage {
+    pub text: String,
+    pub created_at: std::time::Instant,
+    pub message_type: MessageType,
+}
+
+#[derive(Debug, Clone)]
+pub enum MessageType {
+    UpdateInProgress,
+    UpdateSuccess,
+    UpdateError,
+}
+
 /// The main application which holds the state and logic of the application.
 #[derive(Debug)]
 pub struct App {
@@ -73,4 +87,36 @@ pub struct App {
     pub last_song_id: Option<mpd_client::commands::SongId>,
     /// Dirty flags for optimized rendering (tracks which UI regions need redraw)
     pub dirty: DirtyFlags,
+    /// Flag to indicate library reload is needed
+    pub library_reload_pending: bool,
+    /// Previous artist index to restore after library reload
+    pub pending_artist_index: Option<String>,
+    /// Library reload status message
+    pub status_message: Option<StatusMessage>,
+    /// Track if update is in progress to avoid overlapping updates
+    pub update_in_progress: bool,
+}
+
+impl App {
+    pub fn set_status_message(&mut self, message: StatusMessage) {
+        self.status_message = Some(message);
+        self.dirty.mark_status_message();
+    }
+
+    pub fn clear_status_message(&mut self) {
+        self.status_message = None;
+        self.dirty.mark_status_message();
+    }
+
+    pub fn check_status_message_expiry(&mut self) {
+        if let Some(msg) = &self.status_message {
+            let duration = match msg.message_type {
+                MessageType::UpdateInProgress => std::time::Duration::from_secs(300), // Longer for in-progress
+                _ => std::time::Duration::from_secs(5), // Shorter for success/error
+            };
+            if msg.created_at.elapsed() >= duration {
+                self.clear_status_message();
+            }
+        }
+    }
 }

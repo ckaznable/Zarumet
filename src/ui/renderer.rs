@@ -6,6 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph},
 };
 
+use crate::app::MessageType;
 use crate::config::Config;
 use crate::song::{LazyLibrary, SongInfo};
 use crate::ui::ALBUM_DISPLAY_CACHE;
@@ -18,21 +19,46 @@ use crate::ui::widgets::{
 };
 use unicode_width::UnicodeWidthStr;
 
-/// Render key sequence status in bottom-right corner
+/// Render status 0n top-right corner (key sequence or status message)
 /// Returns true if something was rendered (so loading indicator can skip)
-fn render_key_sequence_status(
+fn render_top_right_status(
     frame: &mut Frame,
     key_binds: &crate::binds::KeyBinds,
+    status_message: &Option<crate::app::StatusMessage>,
     area: Rect,
     config: &Config,
 ) -> bool {
-    if !key_binds.is_awaiting_input() {
-        return false;
+    // Prioritize key sequence if awaiting input
+    if key_binds.is_awaiting_input() {
+        if let Some(text) = get_key_sequence_text(key_binds) {
+            return render_right_aligned_text(frame, &text, "Seq: ", area, config);
+        }
     }
 
+    // Otherwise show status message if present
+    if let Some(msg) = status_message {
+        if let Some(text) = get_status_message_text(msg) {
+            return render_right_aligned_text(frame, &text, "", area, config);
+        }
+    }
+
+    false
+}
+
+fn get_status_message_text(msg: &crate::app::StatusMessage) -> Option<String> {
+    let text = match msg.message_type {
+        MessageType::UpdateInProgress => "Updating...",
+        MessageType::UpdateSuccess => "Updated!",
+        MessageType::UpdateError => &msg.text,
+    };
+    Some(text.to_string())
+}
+
+/// Get the current key sequence as displayable text
+fn get_key_sequence_text(key_binds: &crate::binds::KeyBinds) -> Option<String> {
     let sequence = key_binds.get_current_sequence();
     if sequence.is_empty() {
-        return false;
+        return None;
     }
 
     // Convert key sequence to display string
@@ -75,30 +101,42 @@ fn render_key_sequence_status(
         })
         .collect::<Vec<_>>()
         .join(" → ");
+    Some(sequence_text)
+}
 
-    // Calculate position for top-right corner (alongside format info)
-    let text_width = sequence_text.width() + "Seq: ".width();
+/// Render right-aligned text within given area
+fn render_right_aligned_text(
+    frame: &mut Frame,
+    text: &str,
+    prefix: &str,
+    area: Rect,
+    config: &Config,
+) -> bool {
+    let full_text = format!("{}{}", prefix, text);
+    let text_width = full_text.width();
 
     if area.width >= text_width as u16 + 5 && area.height >= 1 {
         let x = area.x + area.width.saturating_sub(text_width as u16 + 5);
         let y = area.y;
 
-        // Display as simple text string like format info (no box, just right-aligned)
-        let sequence_spans = vec![
-            Span::styled(
-                "Seq: ",
-                Style::default().fg(config.colors.top_accent_color()),
-            ),
-            Span::styled(
-                sequence_text.as_str(),
-                Style::default().fg(config.colors.song_title_color()),
-            ),
-        ];
+        let mut spans = vec![];
 
-        let sequence_line = Line::from(sequence_spans);
+        if !prefix.is_empty() {
+            spans.push(Span::styled(
+                prefix,
+                Style::default().fg(config.colors.top_accent_color()),
+            ));
+        }
+
+        spans.push(Span::styled(
+            text,
+            Style::default().fg(config.colors.song_title_color()),
+        ));
+
+        let line = Line::from(spans);
 
         frame.render_widget(
-            Paragraph::new(sequence_line).style(Style::default().fg(ratatui::style::Color::Yellow)),
+            Paragraph::new(line).style(Style::default()),
             Rect {
                 x,
                 y,
@@ -110,7 +148,6 @@ fn render_key_sequence_status(
     }
     false
 }
-
 /// Render config warnings popup centered on screen
 fn render_config_warnings_popup(frame: &mut Frame, warnings: &[String], config: &Config) {
     let area = frame.area();
@@ -227,6 +264,7 @@ pub fn render(
     bit_perfect_enabled: bool,
     show_config_warnings_popup: bool,
     config_warnings: &[String],
+    status_message: &Option<crate::app::StatusMessage>,
 ) {
     let area = frame.area();
 
@@ -314,7 +352,7 @@ pub fn render(
     }
 
     // Render key sequence status overlay
-    render_key_sequence_status(frame, key_binds, area, config);
+    render_top_right_status(frame, key_binds, status_message, area, config);
 
     // Render config warnings popup if showing
     if show_config_warnings_popup && !config_warnings.is_empty() {

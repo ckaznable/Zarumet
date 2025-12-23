@@ -41,6 +41,8 @@ pub struct DirtyFlags {
     last_width: Cell<u16>,
     /// Last known terminal height
     last_height: Cell<u16>,
+    /// Status message needs update
+    pub status_message: Cell<bool>,
 }
 
 #[allow(dead_code)] // Methods reserved for future per-widget dirty checking
@@ -62,6 +64,7 @@ impl DirtyFlags {
             key_sequence: Cell::new(false),
             last_width: Cell::new(0),
             last_height: Cell::new(0),
+            status_message: Cell::new(false),
         }
     }
 
@@ -131,6 +134,12 @@ impl DirtyFlags {
     #[inline]
     pub fn mark_key_sequence(&self) {
         self.key_sequence.set(true);
+    }
+
+    /// Mark status message as dirty
+    #[inline]
+    pub fn mark_status_message(&self) {
+        self.status_message.set(true);
     }
 
     /// Check and update terminal size, marking dirty if changed
@@ -214,6 +223,7 @@ impl DirtyFlags {
             || self.menu_mode.get()
             || self.panel_focus.get()
             || self.key_sequence.get()
+            || self.status_message.get()
     }
 
     /// Check if a full redraw is needed (terminal resize, mode change, etc.)
@@ -239,6 +249,7 @@ impl DirtyFlags {
         self.terminal_size.set(false);
         self.force_full.set(false);
         self.key_sequence.set(false);
+        self.status_message.set(false);
     }
 
     /// Clear only progress dirty flag (for high-frequency progress updates)

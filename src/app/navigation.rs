@@ -3,6 +3,7 @@ use mpd_client::{Client, commands};
 
 use super::App;
 use crate::app::mpd_handler::MPDAction;
+use crate::app::{MessageType, StatusMessage};
 use crate::ui::menu::{MenuMode, PanelFocus};
 use crate::ui::{DisplayItem, compute_album_display_list};
 
@@ -163,105 +164,41 @@ impl Navigation for App {
                 }
             }
             MPDAction::Refresh => {
-                // First, trigger MPD database update (equivalent to `mpc update`)
+                // Ignore if already updating
+                if self.update_in_progress {
+                    log::info!("MPD update already in progress, skipping Refresh action");
+                    return Ok(());
+                }
+
+                // Trigger MPD database update (equivalent to `mpc update`)
                 log::info!("Updating MPD database...");
                 match client.command(commands::Update::new()).await {
                     Ok(job_id) => {
                         log::info!("MPD database update started (job {})", job_id);
 
-                        // Wait for the update to complete by polling status
-                        // The update is done when status.updating_db is None
-                        let mut attempts = 0;
-                        const MAX_ATTEMPTS: u32 = 300; // 30 seconds max wait (100ms * 300)
+                        self.library_reload_pending = true;
 
-                        loop {
-                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                            attempts += 1;
-
-                            match client.command(commands::Status).await {
-                                Ok(status) => {
-                                    if status.update_job.is_none() {
-                                        log::info!("MPD database update completed");
-                                        break;
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to check update status: {}", e);
-                                    break;
-                                }
-                            }
-
-                            if attempts >= MAX_ATTEMPTS {
-                                log::warn!(
-                                    "MPD database update timed out, proceeding with library reload"
-                                );
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to start MPD database update: {}", e);
-                        // Continue with library reload anyway
-                    }
-                }
-
-                // Now reload the music library from MPD
-                log::info!("Refreshing library...");
-                match crate::song::LazyLibrary::init(client).await {
-                    Ok(new_library) => {
-                        log::info!("Library refreshed successfully");
-
-                        // Preserve current artist selection if possible
-                        let previous_artist_name = self.library.as_ref().and_then(|lib| {
+                        self.pending_artist_index = self.library.as_ref().and_then(|lib| {
                             self.artist_list_state
                                 .selected()
                                 .and_then(|idx| lib.artists.get(idx).map(|a| a.name.clone()))
                         });
 
-                        self.library = Some(new_library);
-
-                        // Try to restore artist selection by name
-                        if let Some(prev_name) = previous_artist_name {
-                            if let Some(ref mut library) = self.library {
-                                if let Some(new_idx) =
-                                    library.artists.iter().position(|a| a.name == prev_name)
-                                {
-                                    self.artist_list_state.select(Some(new_idx));
-                                    // Load the restored artist's albums
-                                    if let Err(e) = library.load_artist(client, new_idx).await {
-                                        log::warn!("Failed to load artist after refresh: {}", e);
-                                    }
-                                } else if !library.artists.is_empty() {
-                                    // Artist no longer exists, select first
-                                    self.artist_list_state.select(Some(0));
-                                    if let Err(e) = library.load_artist(client, 0).await {
-                                        log::warn!(
-                                            "Failed to load first artist after refresh: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        } else if let Some(ref mut library) = self.library {
-                            // No previous selection, select first if available
-                            if !library.artists.is_empty() {
-                                self.artist_list_state.select(Some(0));
-                                if let Err(e) = library.load_artist(client, 0).await {
-                                    log::warn!("Failed to load first artist after refresh: {}", e);
-                                }
-                            }
-                        }
-
-                        // Clear album selections since they may be stale
-                        self.album_list_state.select(None);
-                        self.album_display_list_state.select(None);
-                        self.expanded_albums.clear();
-
-                        // Mark library as dirty for re-render
-                        self.dirty.mark_library();
+                        self.set_status_message(StatusMessage {
+                            text: String::new(),
+                            created_at: std::time::Instant::now(),
+                            message_type: MessageType::UpdateInProgress,
+                        })
                     }
                     Err(e) => {
-                        error!("Failed to refresh library: {}", e);
+                        error!("Failed to start MPD database update: {}", e);
+                        // Continue with library reload anyway
+                        //
+                        self.set_status_message(StatusMessage {
+                            text: String::new(),
+                            created_at: std::time::Instant::now(),
+                            message_type: MessageType::UpdateError,
+                        })
                     }
                 }
             }

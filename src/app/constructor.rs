@@ -133,6 +133,10 @@ impl App {
             last_playlist_version: None,
             last_song_id: None,
             dirty: DirtyFlags::new(),
+            library_reload_pending: false,
+            pending_artist_index: None,
+            status_message: None,
+            update_in_progress: false,
         })
     }
 }
