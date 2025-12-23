@@ -7,7 +7,6 @@ use ratatui::{
 
 use crate::config::Config;
 use crate::song::SongInfo;
-use crate::ui::utils::*;
 
 pub fn create_queue_widget<'a>(
     queue: &[SongInfo],
@@ -66,11 +65,28 @@ pub fn create_queue_widget<'a>(
                     None => " (--:--)".to_string(),
                 };
 
-                // Truncate each field to its allocated width using Unicode-aware width
+                // Truncate each field to its allocated width using Unicode-aware width with caching
                 let field_width_max = field_width.max(8);
-                let title = left_align(&song.title, field_width_max);
-                let artist = left_align(&song.artist, field_width_max);
-                let album = left_align(&song.album, field_width_max);
+                let (title, artist, album) = crate::ui::WIDTH_CACHE.with(|cache| {
+                    let mut cache = cache.borrow_mut();
+                    (
+                        crate::ui::utils::left_align_cached(
+                            &mut cache,
+                            &song.title,
+                            field_width_max,
+                        ),
+                        crate::ui::utils::left_align_cached(
+                            &mut cache,
+                            &song.artist,
+                            field_width_max,
+                        ),
+                        crate::ui::utils::left_align_cached(
+                            &mut cache,
+                            &song.album,
+                            field_width_max,
+                        ),
+                    )
+                });
 
                 // Check if this is the currently playing song
                 let is_currently_playing = current_song

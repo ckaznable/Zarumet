@@ -1,5 +1,6 @@
+use crate::ui::width_cache::WidthCache;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 /// Truncate a string to fit within the given display width, handling Unicode properly
 pub fn truncate_by_width(s: &str, max_width: usize) -> String {
@@ -24,11 +25,53 @@ pub fn truncate_by_width(s: &str, max_width: usize) -> String {
     result
 }
 
+/// Cached version of truncate_by_width using WidthCache
+pub fn truncate_by_width_cached(cache: &mut WidthCache, s: &str, max_width: usize) -> String {
+    // For short strings, use the original method (cache overhead not worth it)
+    if s.len() < 10 {
+        return truncate_by_width(s, max_width);
+    }
+
+    // Check if we can use the cached width to avoid full traversal
+    if let Some(cached_width) = cache.peek_width(s) {
+        if cached_width <= max_width {
+            // String fits, just pad it
+            let mut result = s.to_string();
+            let padding_needed = max_width.saturating_sub(cached_width);
+            result.push_str(&" ".repeat(padding_needed));
+            return result;
+        }
+    }
+
+    // Fall back to full calculation with caching
+    let mut result = String::new();
+    let mut current_width = 0;
+
+    for ch in s.chars() {
+        let char_width = ch.width().unwrap_or(0);
+        if current_width + char_width > max_width {
+            break;
+        }
+        result.push(ch);
+        current_width += char_width;
+    }
+
+    // Pad with spaces if needed
+    while current_width < max_width {
+        result.push(' ');
+        current_width += 1;
+    }
+
+    result
+}
+
 /// Left-align a string within given width, handling Unicode properly
-pub fn left_align(s: &str, width: usize) -> String {
-    let display_width = s.width();
+
+/// Cached version of left_align using WidthCache
+pub fn left_align_cached(cache: &mut WidthCache, s: &str, width: usize) -> String {
+    let display_width = cache.get_width(s);
     if display_width >= width {
-        return truncate_by_width(s, width);
+        return truncate_by_width_cached(cache, s, width);
     }
 
     let padding = width - display_width;

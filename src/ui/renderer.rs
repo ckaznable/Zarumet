@@ -482,13 +482,15 @@ fn render_tracks_mode(
             .map(|artist| {
                 // Calculate available width for artist name (subtract borders and padding)
                 let available_width = left_horizontal_chunks[0].width.saturating_sub(4) as usize;
-                let truncated_name = if artist.name.width() > available_width {
-                    crate::ui::utils::truncate_by_width(&artist.name, available_width)
-                } else {
-                    artist.name.clone()
-                };
-                let display_text = truncated_name.to_string();
-                ratatui::widgets::ListItem::new(vec![Line::from(display_text)])
+                let truncated_name = crate::ui::WIDTH_CACHE.with(|cache| {
+                    let mut cache = cache.borrow_mut();
+                    crate::ui::utils::truncate_by_width_cached(
+                        &mut cache,
+                        &artist.name,
+                        available_width,
+                    )
+                });
+                ratatui::widgets::ListItem::new(vec![Line::from(truncated_name)])
             })
             .collect();
 
@@ -572,15 +574,14 @@ fn render_tracks_mode(
                                 available_width.saturating_sub(duration_width + 4); // 6 for " " before/after and "     " between name and duration
 
                             // Truncate album name if needed to keep duration aligned
-                            let truncated_album_name = if album_name.width() > max_album_name_width
-                            {
-                                crate::ui::utils::truncate_by_width(
+                            let truncated_album_name = crate::ui::WIDTH_CACHE.with(|cache| {
+                                let mut cache = cache.borrow_mut();
+                                crate::ui::utils::truncate_by_width_cached(
+                                    &mut cache,
                                     album_name,
                                     max_album_name_width,
                                 )
-                            } else {
-                                album_name.clone()
-                            };
+                            });
 
                             let filler_width =
                                 max_album_name_width.saturating_sub(truncated_album_name.width());
@@ -611,15 +612,14 @@ fn render_tracks_mode(
                                 available_width.saturating_sub(song_duration_width + 3); // 3 for "   " prefix
 
                             // Truncate song title if needed to keep duration aligned
-                            let truncated_song_title = if song_title.width() > max_song_title_width
-                            {
-                                crate::ui::utils::truncate_by_width(
+                            let truncated_song_title = crate::ui::WIDTH_CACHE.with(|cache| {
+                                let mut cache = cache.borrow_mut();
+                                crate::ui::utils::truncate_by_width_cached(
+                                    &mut cache,
                                     song_title,
                                     max_song_title_width,
                                 )
-                            } else {
-                                song_title.clone()
-                            };
+                            });
 
                             let filler_width =
                                 max_song_title_width.saturating_sub(truncated_song_title.width());

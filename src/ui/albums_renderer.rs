@@ -92,11 +92,14 @@ pub fn render_albums_mode(
 
                 // Create display text with album name and artist
                 let display_text = format!("{} - {}", album.name, artist_name);
-                let truncated_text = if display_text.width() > available_width {
-                    crate::ui::utils::truncate_by_width(&display_text, available_width)
-                } else {
-                    display_text
-                };
+                let truncated_text = crate::ui::WIDTH_CACHE.with(|cache| {
+                    let mut cache = cache.borrow_mut();
+                    crate::ui::utils::truncate_by_width_cached(
+                        &mut cache,
+                        &display_text,
+                        available_width,
+                    )
+                });
 
                 ratatui::widgets::ListItem::new(vec![Line::from(truncated_text)])
             })
@@ -153,11 +156,14 @@ pub fn render_albums_mode(
                             available_width.saturating_sub(track_duration_width + 3);
 
                         // Truncate track title if needed to keep duration aligned
-                        let truncated_track_title = if track.title.width() > max_track_title_width {
-                            crate::ui::utils::truncate_by_width(&track.title, max_track_title_width)
-                        } else {
-                            track.title.clone()
-                        };
+                        let truncated_track_title = crate::ui::WIDTH_CACHE.with(|cache| {
+                            let mut cache = cache.borrow_mut();
+                            crate::ui::utils::truncate_by_width_cached(
+                                &mut cache,
+                                &track.title,
+                                max_track_title_width,
+                            )
+                        });
 
                         let filler_width =
                             max_track_title_width.saturating_sub(truncated_track_title.width());

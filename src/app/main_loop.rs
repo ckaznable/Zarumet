@@ -1,5 +1,6 @@
 use std::io::Cursor;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use mpd_client::Client;
@@ -200,6 +201,21 @@ impl AppMainLoop for App {
 
             // Update key bindings for timeouts
             self.key_binds.update();
+
+            // Log width cache statistics periodically
+            static CACHE_LOG_COUNTER: AtomicU64 = AtomicU64::new(0);
+            let counter = CACHE_LOG_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+            // Log every ~600 iterations (about every 30 seconds at 20 FPS)
+            if counter % 600 == 0 && counter > 0 {
+                crate::ui::WIDTH_CACHE.with(|cache| {
+                    let cache = cache.borrow();
+                    if cache.total_accesses() > 100 {
+                        // Only log if there's meaningful activity
+                        cache.log_stats();
+                    }
+                });
+            }
 
             // Event-driven loop using tokio::select!
             tokio::select! {
