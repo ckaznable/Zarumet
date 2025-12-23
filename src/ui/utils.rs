@@ -104,6 +104,79 @@ pub enum DisplayItem {
     Song(String, Option<std::time::Duration>, std::path::PathBuf), // song title, duration, and file path
 }
 
+/// Cache for computed album display lists
+/// Avoids recomputing display lists every frame when artist/expansion state hasn't changed
+#[derive(Debug, Default)]
+pub struct AlbumDisplayCache {
+    /// The artist index this cache was computed for
+    artist_index: Option<usize>,
+    /// Hash of expanded_albums state when cache was computed
+    expanded_count: usize,
+    /// Number of albums in the artist when cached
+    albums_count: usize,
+    /// Cached display items
+    display_items: Vec<DisplayItem>,
+    /// Cached album indices mapping
+    album_indices: Vec<Option<usize>>,
+}
+
+impl AlbumDisplayCache {
+    /// Create a new empty cache
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get cached display list or compute and cache it
+    /// Returns references to the cached data
+    pub fn get_or_compute(
+        &mut self,
+        artist_index: usize,
+        artist: &crate::song::Artist,
+        expanded_albums: &std::collections::HashSet<(String, String)>,
+    ) -> (&[DisplayItem], &[Option<usize>]) {
+        // Check if cache is still valid
+        let is_valid = self.artist_index == Some(artist_index)
+            && self.expanded_count == expanded_albums.len()
+            && self.albums_count == artist.albums.len();
+
+        if !is_valid {
+            // Recompute and cache
+            let (items, indices) = compute_album_display_list(artist, expanded_albums);
+            self.artist_index = Some(artist_index);
+            self.expanded_count = expanded_albums.len();
+            self.albums_count = artist.albums.len();
+            self.display_items = items;
+            self.album_indices = indices;
+            log::trace!(
+                "AlbumDisplayCache: recomputed for artist {} ({} items)",
+                artist_index,
+                self.display_items.len()
+            );
+        }
+
+        (&self.display_items, &self.album_indices)
+    }
+
+    /// Invalidate the cache (call when expanded_albums changes for current artist)
+    #[allow(dead_code)]
+    pub fn invalidate(&mut self) {
+        self.artist_index = None;
+    }
+
+    /// Check if cache is valid for the given parameters
+    #[allow(dead_code)]
+    pub fn is_valid_for(
+        &self,
+        artist_index: usize,
+        expanded_count: usize,
+        albums_count: usize,
+    ) -> bool {
+        self.artist_index == Some(artist_index)
+            && self.expanded_count == expanded_count
+            && self.albums_count == albums_count
+    }
+}
+
 /// Compute the display list for albums panel considering expanded albums
 /// Returns (display_items, mapping_from_display_to_album_index)
 pub fn compute_album_display_list(

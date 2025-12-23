@@ -8,9 +8,10 @@ use ratatui::{
 
 use crate::config::Config;
 use crate::song::{LazyLibrary, SongInfo};
+use crate::ui::ALBUM_DISPLAY_CACHE;
 use crate::ui::RENDER_CACHE;
 use crate::ui::menu::{MenuMode, PanelFocus};
-use crate::ui::utils::{DisplayItem, compute_album_display_list};
+use crate::ui::utils::DisplayItem;
 use crate::ui::widgets::{
     create_empty_box, create_format_widget, create_left_box_bottom, create_left_box_top,
     create_song_widget, create_top_box, render_image_widget,
@@ -535,8 +536,14 @@ fn render_tracks_mode(
                 album_list_state.select(Some(0));
             }
 
-            let (display_items, _album_indices) =
-                compute_album_display_list(&selected_artist, expanded_albums);
+            // Use cached display list - get_or_compute returns references,
+            // so we clone only the items we need for rendering
+            let display_items: Vec<DisplayItem> = ALBUM_DISPLAY_CACHE.with(|cache| {
+                let mut cache = cache.borrow_mut();
+                let (items, _indices) =
+                    cache.get_or_compute(selected_artist_index, &selected_artist, expanded_albums);
+                items.to_vec()
+            });
 
             let albums_list: Vec<ratatui::widgets::ListItem> = display_items
                 .iter()
