@@ -1,4 +1,5 @@
 pub mod albums_renderer;
+pub mod dirty;
 pub mod menu;
 pub mod render_cache;
 pub mod renderer;
@@ -6,6 +7,7 @@ pub mod utils;
 pub mod widgets;
 pub mod width_cache;
 
+pub use dirty::DirtyFlags;
 pub use render_cache::RenderCache;
 pub use renderer::render;
 pub use utils::{AlbumDisplayCache, DisplayItem, Protocol, compute_album_display_list};

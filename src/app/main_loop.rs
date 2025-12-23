@@ -179,34 +179,44 @@ impl AppMainLoop for App {
         log::info!("Entering event-driven main loop");
 
         while self.running {
-            // Render the UI
-            terminal.draw(|frame| {
-                crate::ui::render(
-                    frame,
-                    &mut protocol,
-                    &self.current_song,
-                    &self.queue,
-                    &mut self.queue_list_state,
-                    &self.config,
-                    &self.menu_mode,
-                    &self.library,
-                    &mut self.artist_list_state,
-                    &mut self.album_list_state,
-                    &mut self.album_display_list_state,
-                    &mut self.all_albums_list_state,
-                    &mut self.album_tracks_list_state,
-                    &self.panel_focus,
-                    &self.expanded_albums,
-                    &self.mpd_status,
-                    &self.key_binds,
-                    self.bit_perfect_enabled,
-                    self.show_config_warnings_popup,
-                    &self.config_warnings,
-                )
-            })?;
+            // Check terminal size for dirty tracking
+            let term_size = terminal.size()?;
+            self.dirty
+                .check_terminal_size(term_size.width, term_size.height);
 
-            if let Some(ref mut img) = protocol.image {
-                img.last_encoding_result();
+            // Only render if something has changed
+            if self.dirty.any_dirty() {
+                terminal.draw(|frame| {
+                    crate::ui::render(
+                        frame,
+                        &mut protocol,
+                        &self.current_song,
+                        &self.queue,
+                        &mut self.queue_list_state,
+                        &self.config,
+                        &self.menu_mode,
+                        &self.library,
+                        &mut self.artist_list_state,
+                        &mut self.album_list_state,
+                        &mut self.album_display_list_state,
+                        &mut self.all_albums_list_state,
+                        &mut self.album_tracks_list_state,
+                        &self.panel_focus,
+                        &self.expanded_albums,
+                        &self.mpd_status,
+                        &self.key_binds,
+                        self.bit_perfect_enabled,
+                        self.show_config_warnings_popup,
+                        &self.config_warnings,
+                    )
+                })?;
+
+                if let Some(ref mut img) = protocol.image {
+                    img.last_encoding_result();
+                }
+
+                // Clear dirty flags after render
+                self.dirty.clear_all();
             }
 
             // Update key bindings for timeouts

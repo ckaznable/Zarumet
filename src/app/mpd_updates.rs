@@ -63,6 +63,9 @@ impl MPDUpdates for App {
             // Update selected index to stay within bounds
             self.update_queue_selection();
             self.last_playlist_version = Some(status.playlist_version);
+
+            // Mark queue as dirty for rendering
+            self.dirty.mark_queue();
         }
 
         // Fetch current song only if needed AND it actually changed
@@ -81,6 +84,10 @@ impl MPDUpdates for App {
                 }
             }
             self.last_song_id = current_song_id;
+
+            // Mark current song and cover art as dirty
+            self.dirty.mark_current_song();
+            self.dirty.mark_cover_art();
         }
 
         // Always update playback info from status
@@ -131,6 +138,10 @@ impl App {
             song.update_playback_info(Some(status.state), progress);
             song.update_time_info(status.elapsed, status.duration);
         }
+
+        // Mark status and progress as dirty
+        self.dirty.mark_status();
+        self.dirty.mark_progress();
 
         self.mpd_status = Some(status);
     }

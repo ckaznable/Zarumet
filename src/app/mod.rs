@@ -1,6 +1,7 @@
 use crate::binds::KeyBinds;
 use crate::config::Config;
 use crate::song::{LazyLibrary, SongInfo};
+use crate::ui::DirtyFlags;
 use crate::ui::menu::{MenuMode, PanelFocus};
 use mpd_client::responses::PlayState;
 use ratatui::widgets::ListState;
@@ -70,4 +71,6 @@ pub struct App {
     pub last_playlist_version: Option<u32>,
     /// Last known song ID from MPD (to skip refetching same song)
     pub last_song_id: Option<mpd_client::commands::SongId>,
+    /// Dirty flags for optimized rendering (tracks which UI regions need redraw)
+    pub dirty: DirtyFlags,
 }
