@@ -140,7 +140,7 @@ impl AppMainLoop for App {
                     target_rate,
                     song_rate
                 );
-                let _ = crate::pipewire::set_sample_rate(target_rate);
+                let _ = crate::pipewire::set_sample_rate_async(target_rate).await;
             }
         }
 
@@ -390,6 +390,8 @@ impl AppMainLoop for App {
                                     .and_then(|reader| reader.decode().ok())
                                     .map(|dyn_img| picker.new_resize_protocol(dyn_img));
 
+                                // Mark cover art as dirty to trigger redraw
+                                self.dirty.mark_cover_art();
                                 log::debug!("Cover art loaded for {:?}", file_path);
                             }
                         }
@@ -424,7 +426,7 @@ impl AppMainLoop for App {
         #[cfg(target_os = "linux")]
         if self.bit_perfect_enabled && self.config.pipewire.is_available() {
             log::debug!("Resetting PipeWire sample rate on exit");
-            let _ = crate::pipewire::reset_sample_rate();
+            let _ = crate::pipewire::reset_sample_rate_async().await;
         }
 
         Ok(())
@@ -612,7 +614,10 @@ fn handle_pipewire_state_change(
                         target_rate,
                         song_rate
                     );
-                    let _ = crate::pipewire::set_sample_rate(target_rate);
+                    // Fire-and-forget async call to avoid blocking the UI
+                    tokio::spawn(async move {
+                        let _ = crate::pipewire::set_sample_rate_async(target_rate).await;
+                    });
                 }
             }
         }
@@ -624,7 +629,10 @@ fn handle_pipewire_state_change(
                     "Resetting PipeWire sample rate (playback stopped, last_state={:?})",
                     last_play_state
                 );
-                let _ = crate::pipewire::reset_sample_rate();
+                // Fire-and-forget async call to avoid blocking the UI
+                tokio::spawn(async {
+                    let _ = crate::pipewire::reset_sample_rate_async().await;
+                });
             }
         }
     }
