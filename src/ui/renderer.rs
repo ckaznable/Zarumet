@@ -109,62 +109,6 @@ fn render_key_sequence_status(
     false
 }
 
-/// Render loading indicator in top-right corner when artist albums are being loaded
-fn render_loading_indicator(
-    frame: &mut Frame,
-    area: Rect,
-    config: &Config,
-    library: &Option<crate::song::LazyLibrary>,
-    artist_list_state: &ListState,
-    menu_mode: &MenuMode,
-    spinner_frame: u8,
-) {
-    // Only show in Artists mode
-    if !matches!(menu_mode, MenuMode::Artists) {
-        return;
-    }
-
-    // Check if current artist is not loaded
-    let is_loading =
-        if let (Some(lib), Some(selected_index)) = (library, artist_list_state.selected()) {
-            !lib.is_artist_loaded(selected_index)
-        } else {
-            false
-        };
-
-    if !is_loading {
-        return;
-    }
-
-    // Spinner animation frames (cycles every ~4 render frames for visible animation)
-    const SPINNER_CHARS: &[char] = &['|', '/', '-', '\\'];
-    let spinner_index = (spinner_frame / 4) as usize % SPINNER_CHARS.len();
-    let spinner_char = SPINNER_CHARS[spinner_index];
-
-    let loading_text = format!("{} Loading...", spinner_char);
-    let text_width = loading_text.width();
-
-    if area.width >= text_width as u16 + 5 && area.height >= 1 {
-        let x = area.x + area.width.saturating_sub(text_width as u16 + 3);
-        let y = area.y;
-
-        let loading_span = Span::styled(
-            loading_text,
-            Style::default().fg(config.colors.top_accent_color()),
-        );
-
-        frame.render_widget(
-            Paragraph::new(Line::from(loading_span)),
-            Rect {
-                x,
-                y,
-                width: text_width as u16,
-                height: 1,
-            },
-        );
-    }
-}
-
 /// Render config warnings popup centered on screen
 fn render_config_warnings_popup(frame: &mut Frame, warnings: &[String], config: &Config) {
     let area = frame.area();
@@ -281,7 +225,6 @@ pub fn render(
     bit_perfect_enabled: bool,
     show_config_warnings_popup: bool,
     config_warnings: &[String],
-    spinner_frame: u8,
 ) {
     let area = frame.area();
 
@@ -368,21 +311,8 @@ pub fn render(
         }
     }
 
-    // Render key sequence status overlay (takes priority over loading indicator)
-    let sequence_shown = render_key_sequence_status(frame, key_binds, area, config);
-
-    // Render loading indicator if no sequence is being shown
-    if !sequence_shown {
-        render_loading_indicator(
-            frame,
-            area,
-            config,
-            library,
-            artist_list_state,
-            menu_mode,
-            spinner_frame,
-        );
-    }
+    // Render key sequence status overlay
+    render_key_sequence_status(frame, key_binds, area, config);
 
     // Render config warnings popup if showing
     if show_config_warnings_popup && !config_warnings.is_empty() {

@@ -348,14 +348,6 @@ impl LazyLibrary {
         Ok(())
     }
 
-    /// Check if an artist's data has been loaded
-    pub fn is_artist_loaded(&self, artist_index: usize) -> bool {
-        self.artists
-            .get(artist_index)
-            .map(|a| a.is_loaded())
-            .unwrap_or(false)
-    }
-
     /// Get an Artist struct for the given index (for rendering).
     /// Returns None if index is out of bounds.
     /// If the artist's albums haven't been loaded, returns an Artist with empty albums.
