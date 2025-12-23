@@ -80,6 +80,7 @@ impl EventHandlers for App {
                     // Only allow toggling if bit-perfect is available (enabled in config)
                     if self.config.pipewire.is_available() {
                         self.bit_perfect_enabled = !self.bit_perfect_enabled;
+                        self.dirty.mark_status();
                         // Reset PipeWire state tracking so handle_pipewire_state_change
                         // will properly detect state changes after toggle
                         self.last_play_state = None;
