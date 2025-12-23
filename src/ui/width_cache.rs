@@ -301,6 +301,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Performance benchmarks are non-deterministic; run with --ignored
     fn bench_uncached_vs_cached() {
         use std::time::Instant;
 
@@ -360,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Performance benchmarks are non-deterministic; run with --ignored
     fn bench_truncation_performance() {
         use crate::ui::utils::{truncate_by_width, truncate_by_width_cached};
         use std::time::Instant;
@@ -405,6 +407,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Performance benchmarks are non-deterministic; run with --ignored
     fn stress_test_large_library() {
         use crate::ui::utils::left_align_cached;
         use std::time::Instant;
