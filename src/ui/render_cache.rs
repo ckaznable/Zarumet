@@ -11,6 +11,9 @@ const MAX_FILLER_WIDTH: usize = 256;
 /// Maximum number of progress bar widths to cache
 const MAX_PROGRESS_BAR_WIDTH: usize = 256;
 
+/// Maximum queue position to pre-generate (covers most playlists)
+const MAX_QUEUE_POSITION: usize = 1000;
+
 /// Cache for pre-generated filler strings (spaces, dashes, etc.)
 #[derive(Debug)]
 pub struct FillerCache {
@@ -69,6 +72,77 @@ impl FillerCache {
         } else {
             ""
         }
+    }
+}
+
+/// Cache for queue position prefixes ("1. ", "2. ", etc.)
+#[derive(Debug)]
+pub struct QueuePositionCache {
+    /// Pre-generated position strings: positions[n] = format!("{}. ", n + 1)
+    positions: Vec<String>,
+}
+
+impl Default for QueuePositionCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QueuePositionCache {
+    /// Create a new queue position cache with pre-generated strings
+    pub fn new() -> Self {
+        Self {
+            positions: (0..MAX_QUEUE_POSITION)
+                .map(|n| format!("{}. ", n + 1))
+                .collect(),
+        }
+    }
+
+    /// Get the position prefix for a 0-based index (e.g., index 0 -> "1. ")
+    #[inline]
+    pub fn get(&self, index: usize) -> &str {
+        if index < self.positions.len() {
+            &self.positions[index]
+        } else {
+            // Fallback for very large queues (allocates, but rare)
+            "?. "
+        }
+    }
+}
+
+/// Cache for file type display strings ("FLAC", "MP3", etc.)
+#[derive(Debug)]
+pub struct FileTypeCache {
+    /// Cached uppercase file extensions
+    extensions: HashMap<String, String>,
+}
+
+impl Default for FileTypeCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FileTypeCache {
+    /// Create a new file type cache with common extensions pre-populated
+    pub fn new() -> Self {
+        let mut extensions = HashMap::new();
+        // Pre-populate common audio formats
+        for ext in &[
+            "flac", "mp3", "opus", "ogg", "m4a", "aac", "wav", "aiff", "wma", "ape", "wv", "dsf",
+            "dff",
+        ] {
+            extensions.insert(ext.to_string(), ext.to_uppercase());
+        }
+        Self { extensions }
+    }
+
+    /// Get the uppercase version of a file extension
+    pub fn get_uppercase(&mut self, ext: &str) -> &str {
+        let ext_lower = ext.to_lowercase();
+        self.extensions
+            .entry(ext_lower)
+            .or_insert_with(|| ext.to_uppercase())
     }
 }
 
@@ -189,6 +263,10 @@ pub struct RenderCache {
     pub durations: DurationCache,
     /// Cached volume bar strings
     pub volume_bars: VolumeBarCache,
+    /// Pre-generated queue position prefixes
+    pub queue_positions: QueuePositionCache,
+    /// Cached file type display strings
+    pub file_types: FileTypeCache,
 }
 
 impl Default for RenderCache {
@@ -204,6 +282,8 @@ impl RenderCache {
             fillers: FillerCache::new(),
             durations: DurationCache::new(),
             volume_bars: VolumeBarCache::new(),
+            queue_positions: QueuePositionCache::new(),
+            file_types: FileTypeCache::new(),
         }
     }
 
@@ -211,9 +291,11 @@ impl RenderCache {
     #[allow(dead_code)]
     pub fn log_stats(&self) {
         log::debug!(
-            "RenderCache stats: durations={}, filler_widths={}",
+            "RenderCache stats: durations={}, filler_widths={}, queue_positions={}, file_types={}",
             self.durations.len(),
-            MAX_FILLER_WIDTH
+            MAX_FILLER_WIDTH,
+            MAX_QUEUE_POSITION,
+            self.file_types.extensions.len()
         );
     }
 }
@@ -262,6 +344,38 @@ mod tests {
         assert_eq!(cache.filled(100), "██████████");
         assert_eq!(cache.empty(100), "");
         assert_eq!(cache.percent(100), " 100%");
+    }
+
+    #[test]
+    fn test_queue_position_cache() {
+        let cache = QueuePositionCache::new();
+
+        assert_eq!(cache.get(0), "1. ");
+        assert_eq!(cache.get(1), "2. ");
+        assert_eq!(cache.get(9), "10. ");
+        assert_eq!(cache.get(99), "100. ");
+        assert_eq!(cache.get(999), "1000. ");
+
+        // Beyond MAX_QUEUE_POSITION should return fallback
+        assert_eq!(cache.get(10000), "?. ");
+    }
+
+    #[test]
+    fn test_file_type_cache() {
+        let mut cache = FileTypeCache::new();
+
+        // Common extensions are pre-populated
+        assert_eq!(cache.get_uppercase("flac"), "FLAC");
+        assert_eq!(cache.get_uppercase("mp3"), "MP3");
+        assert_eq!(cache.get_uppercase("opus"), "OPUS");
+
+        // Case-insensitive lookup
+        assert_eq!(cache.get_uppercase("FLAC"), "FLAC");
+        assert_eq!(cache.get_uppercase("Flac"), "FLAC");
+
+        // Unknown extension gets cached on first access
+        assert_eq!(cache.get_uppercase("xyz"), "XYZ");
+        assert!(cache.extensions.contains_key("xyz"));
     }
 
     #[test]

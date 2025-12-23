@@ -31,16 +31,17 @@ pub fn create_queue_widget<'a>(
         vec![]
     } else {
         // First, determine the maximum number width needed for proper alignment
-        let max_num_width = queue
-            .iter()
-            .enumerate()
-            .take(1000) // Reasonable limit for calculation
-            .map(|(i, _)| {
-                let num_str = format!("{}. ", i + 1);
-                unicode_width::UnicodeWidthStr::width(&num_str as &str)
-            })
-            .max()
-            .unwrap_or(3); // fallback to 3 for single digit
+        // Use cached position strings for width calculation
+        let max_num_width = RENDER_CACHE.with(|cache| {
+            let cache = cache.borrow();
+            queue
+                .iter()
+                .enumerate()
+                .take(1000) // Reasonable limit for calculation
+                .map(|(i, _)| unicode_width::UnicodeWidthStr::width(cache.queue_positions.get(i)))
+                .max()
+                .unwrap_or(3) // fallback to 3 for single digit
+        });
 
         queue
             .iter()
@@ -136,8 +137,11 @@ pub fn create_queue_widget<'a>(
                     pos_color = pos_color.bold().italic();
                 }
 
-                // Create spans with appropriate styling
-                let num_str = format!("{}. ", i + 1);
+                // Create spans with appropriate styling - use cached position string
+                let num_str = RENDER_CACHE.with(|cache| {
+                    let cache = cache.borrow();
+                    cache.queue_positions.get(i).to_owned()
+                });
                 let padded_num_str = format!("{:<width$}", num_str, width = max_num_width);
                 let mut spans = vec![Span::styled(padded_num_str, pos_color)];
 
@@ -153,15 +157,15 @@ pub fn create_queue_widget<'a>(
                 if is_selected {
                     // Calculate the current line width by reconstructing the line content
                     let line_content = format!(
-                        "{}. {} ║ {} ║ {}{}",
-                        i + 1,
+                        "{} ║ {} ║ {}{}",
                         title.clone(),
                         artist.clone(),
                         album.clone(),
                         duration_str.clone()
                     );
                     let current_width =
-                        unicode_width::UnicodeWidthStr::width(&line_content as &str);
+                        unicode_width::UnicodeWidthStr::width(&line_content as &str)
+                            + max_num_width;
                     let remaining_width = area.width.saturating_sub(current_width as u16) as usize;
 
                     if remaining_width > 0 {
