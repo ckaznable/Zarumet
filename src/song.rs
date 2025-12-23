@@ -273,11 +273,17 @@ impl LazyLibrary {
         let filter = Filter::new(Tag::AlbumArtist, Operator::Equal, artist_name.clone());
         let find_cmd = commands::Find::new(filter).sort(Tag::Album);
 
-        let songs = client.command(find_cmd).await.map_err(|e| {
-            // Revert to NotLoaded on error
-            self.artists[artist_index].albums = ArtistData::NotLoaded;
-            color_eyre::eyre::eyre!("Failed to find songs for artist: {}", e)
-        })?;
+        let songs = match client.command(find_cmd).await {
+            Ok(songs) => songs,
+            Err(e) => {
+                // Revert to NotLoaded on error
+                self.artists[artist_index].albums = ArtistData::NotLoaded;
+                return Err(color_eyre::eyre::eyre!(
+                    "Failed to find songs for artist: {}",
+                    e
+                ));
+            }
+        };
 
         // Group songs by album
         let mut albums_map: std::collections::HashMap<String, Vec<SongInfo>> =
