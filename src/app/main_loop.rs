@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use mpd_client::Client;
-use mpd_client::client::ConnectionEvent;
+use mpd_client::client::{ConnectionEvent, Subsystem};
 use mpd_client::responses::PlayState;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
@@ -248,8 +248,48 @@ impl AppMainLoop for App {
                         Some(ConnectionEvent::SubsystemChange(subsystem)) => {
                             log::debug!("MPD subsystem change: {:?}", subsystem);
 
-                            // Update state based on what changed
-                            self.run_updates(&client).await?;
+                            // Optimize updates based on which subsystem changed
+                            match subsystem {
+                                // Player state changes (play/pause/stop/seek) - need status + maybe current song
+                                Subsystem::Player => {
+                                    self.run_optimized_updates(&client, false, true).await?;
+                                }
+                                // Mixer changes (volume) - only need status
+                                Subsystem::Mixer => {
+                                    self.update_status_only(&client).await?;
+                                }
+                                // Options changes (repeat, random, etc.) - only need status
+                                Subsystem::Options => {
+                                    self.update_status_only(&client).await?;
+                                }
+                                // Queue/playlist changes - need full update
+                                Subsystem::Queue => {
+                                    self.run_updates(&client).await?;
+                                }
+                                // Stored playlist changes - may affect queue if current playlist modified
+                                Subsystem::StoredPlaylist => {
+                                    self.run_updates(&client).await?;
+                                }
+                                // Database, output, sticker, etc. - typically don't affect current playback
+                                Subsystem::Database
+                                | Subsystem::Output
+                                | Subsystem::Sticker
+                                | Subsystem::Subscription
+                                | Subsystem::Message
+                                | Subsystem::Partition
+                                | Subsystem::Neighbor
+                                | Subsystem::Mount
+                                | Subsystem::Update
+                                | Subsystem::Other(_) => {
+                                    // These don't typically require UI updates
+                                    log::debug!("Ignoring subsystem change: {:?}", subsystem);
+                                }
+                                // Catch-all for any future subsystem types
+                                _ => {
+                                    log::debug!("Unknown subsystem change: {:?}, doing full update", subsystem);
+                                    self.run_updates(&client).await?;
+                                }
+                            }
 
                             // Check for song change
                             check_song_change(

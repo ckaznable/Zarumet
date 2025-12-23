@@ -129,6 +129,8 @@ impl App {
             show_config_warnings_popup: false,
             last_play_state: None,
             last_sample_rate: None,
+            last_playlist_version: None,
+            last_song_id: None,
         })
     }
 }

@@ -65,4 +65,8 @@ pub struct App {
     pub last_play_state: Option<PlayState>,
     /// Last sample rate for PipeWire rate tracking (used to detect song changes)
     pub last_sample_rate: Option<u32>,
+    /// Last known queue/playlist version from MPD (for differential updates)
+    pub last_playlist_version: Option<u32>,
+    /// Last known song ID from MPD (to skip refetching same song)
+    pub last_song_id: Option<mpd_client::commands::SongId>,
 }
