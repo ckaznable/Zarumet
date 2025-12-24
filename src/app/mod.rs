@@ -124,14 +124,15 @@ impl App {
 
     pub fn check_animation_updates(&mut self) {
         if let Some(msg) = &self.status_message
-            && matches!(msg.message_type, MessageType::InProgress) {
-                let elapsed_ms = msg.created_at.elapsed().as_millis() as u64;
-                let current_frame = (elapsed_ms / 500) % 3;
+            && matches!(msg.message_type, MessageType::InProgress)
+        {
+            let elapsed_ms = msg.created_at.elapsed().as_millis() as u64;
+            let current_frame = (elapsed_ms / 500) % 3;
 
-                if self.last_animation_frame.get() != current_frame {
-                    self.last_animation_frame.set(current_frame);
-                    self.dirty.mark_status_message();
-                }
+            if self.last_animation_frame.get() != current_frame {
+                self.last_animation_frame.set(current_frame);
+                self.dirty.mark_status_message();
             }
+        }
     }
 }
