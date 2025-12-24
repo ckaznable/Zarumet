@@ -25,20 +25,45 @@ pub struct SongInfo {
 }
 
 impl SongInfo {
+    fn sanitize_string(s: &str) -> String {
+        let result: String = s
+            .chars()
+            .map(|c| match c {
+                '\u{0000}'..='\u{001F}'
+                | '\u{007F}'..='\u{009F}'
+                | '\u{00AD}'
+                | '\u{200B}'
+                | '\u{200C}'
+                | '\u{200D}'
+                | '\u{2060}'
+                | '\u{3164}'
+                | '\u{FEFF}' => ' ',
+                _ => c,
+            })
+            .collect();
+        if result != s {
+            log::debug!("Sanitized string: {:?} -> {:?}", s, result);
+            for c in s.chars() {
+                log::debug!("  Character U+{:04X}: '{}'", c as u32, c);
+            }
+        }
+        result
+    }
+
     pub fn from_song(song: &Song) -> Self {
         let title = song
             .title()
-            .map(|s| s.to_string())
+            .map(|s| Self::sanitize_string(s))
             .unwrap_or_else(|| "Unknown Title".to_string());
         let artist = song
             .artists()
             .first()
-            .map(|s| s.to_string())
+            .map(|s| Self::sanitize_string(s))
             .unwrap_or_else(|| "Unknown Artist".to_string());
 
         let album = song
             .album()
-            .map(|s| s.to_string())
+            .map(|s| Self::sanitize_string(s))
             .unwrap_or_else(|| "Unknown Album".to_string());
 
         let file_path = song.file_path().to_path_buf();
@@ -113,6 +138,7 @@ pub struct Album {
 impl Album {
     /// Create a new Album with pre-computed total duration
     pub fn new(name: String, tracks: Vec<SongInfo>) -> Self {
+        let name = SongInfo::sanitize_string(&name);
         let cached_total_duration = Self::compute_total_duration(&tracks);
         Self {
             name,
@@ -170,6 +196,7 @@ pub struct LazyArtist {
 impl LazyArtist {
     /// Create a new lazy artist with just the name
     pub fn new(name: String) -> Self {
+        let name = SongInfo::sanitize_string(&name);
         Self {
             name,
             albums: ArtistData::NotLoaded,
