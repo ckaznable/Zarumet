@@ -53,7 +53,7 @@ impl SongInfo {
     pub fn from_song(song: &Song) -> Self {
         let title = song
             .title()
-            .map(|s| Self::sanitize_string(s))
+            .map(Self::sanitize_string)
             .unwrap_or_else(|| "Unknown Title".to_string());
         let artist = song
             .artists()
@@ -63,7 +63,7 @@ impl SongInfo {
 
         let album = song
             .album()
-            .map(|s| Self::sanitize_string(s))
+            .map(Self::sanitize_string)
             .unwrap_or_else(|| "Unknown Album".to_string());
 
         let file_path = song.file_path().to_path_buf();
