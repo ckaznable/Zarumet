@@ -94,16 +94,19 @@ impl EventHandlers for App {
                                 && let Some(ref song) = self.current_song
                                 && let Some(song_rate) = song.sample_rate()
                                 && let Some(supported_rates) =
-                                    crate::pipewire::get_supported_rates()
+                                    crate::app::audio::pipewire::get_supported_rates()
                             {
-                                let target_rate = crate::config::resolve_bit_perfect_rate(
-                                    song_rate,
-                                    &supported_rates,
-                                );
+                                let target_rate =
+                                    crate::app::config::pipewire::resolve_bit_perfect_rate(
+                                        song_rate,
+                                        &supported_rates,
+                                    );
                                 // Fire-and-forget async call
                                 tokio::spawn(async move {
-                                    let _ =
-                                        crate::pipewire::set_sample_rate_async(target_rate).await;
+                                    let _ = crate::app::audio::pipewire::set_sample_rate_async(
+                                        target_rate,
+                                    )
+                                    .await;
                                 });
                             }
                         } else {
@@ -112,7 +115,9 @@ impl EventHandlers for App {
                             let is_playing = self.mpd_status.as_ref().is_some_and(|s| {
                                 s.state == mpd_client::responses::PlayState::Playing
                             });
-                            if crate::pipewire::reset_sample_rate_async().await.is_ok()
+                            if crate::app::audio::pipewire::reset_sample_rate_async()
+                                .await
+                                .is_ok()
                                 && is_playing
                             {
                                 // Do a quick pause/unpause to force PipeWire to renegotiate

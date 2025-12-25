@@ -1,21 +1,14 @@
 // Module declarations
 mod app;
-mod binds;
-mod config;
-mod logging;
-#[cfg(target_os = "linux")]
-mod pipewire;
-mod song;
-mod ui;
 
-use app::cli::Args;
 use app::{
-    App,
-    main_loop::AppMainLoop,
+    App, AppMainLoop,
+    cli::Args,
+    config::Config,
+    logging,
     terminal::{init_terminal, restore_terminal},
 };
 use clap::Parser;
-use config::Config;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -52,11 +45,11 @@ async fn main() -> color_eyre::Result<()> {
 
     // Initialize logger first
     if config.logging.enabled {
-        crate::logging::ensure_log_directory()?;
-        crate::logging::init_logger(&config.logging)?;
-        crate::logging::log_startup_info();
+        logging::ensure_log_directory()?;
+        logging::init_logger(&config.logging)?;
+        logging::log_startup_info();
         // Log config loading now that logger is initialized
-        crate::logging::log_config_loading(&config_path, !config_existed);
+        logging::log_config_loading(&config_path, !config_existed);
 
         // Log any config warnings that were collected during loading
         for warning in &config_warnings {
@@ -74,7 +67,7 @@ async fn main() -> color_eyre::Result<()> {
     #[cfg(target_os = "linux")]
     {
         if config.pipewire.bit_perfect_enabled
-            && let Err(e) = crate::pipewire::initialize_supported_rates()
+            && let Err(e) = crate::app::audio::pipewire::initialize_supported_rates()
         {
             log::warn!("Failed to initialize PipeWire supported rates: {}", e);
         }

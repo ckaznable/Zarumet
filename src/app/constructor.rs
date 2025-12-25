@@ -1,9 +1,9 @@
 use super::App;
+use crate::app::Config;
+use crate::app::DirtyFlags;
+use crate::app::KeyBinds;
 use crate::app::cli::Args;
-use crate::binds::KeyBinds;
-use crate::config::Config;
-use crate::ui::DirtyFlags;
-use crate::ui::menu::{MenuMode, PanelFocus};
+use crate::app::{MenuMode, PanelFocus};
 use ratatui::widgets::ListState;
 use std::cell::Cell;
 use std::path::PathBuf;
