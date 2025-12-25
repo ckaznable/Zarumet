@@ -42,8 +42,6 @@ pub trait AppMainLoop {
         Self: Sized;
 }
 
-/// Connect to MPD via Unix socket or TCP based on address format
-
 impl AppMainLoop for App {
     /// Run the application's main loop.
     async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {

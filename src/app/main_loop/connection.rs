@@ -4,6 +4,7 @@ use tokio::net::TcpStream;
 #[cfg(unix)]
 use tokio::net::UnixStream;
 
+/// Connect to MPD via Unix socket or TCP based on address format
 pub async fn connect_to_mpd(
     address: &str,
 ) -> color_eyre::Result<(Client, mpd_client::client::ConnectionEvents)> {
