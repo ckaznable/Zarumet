@@ -13,6 +13,10 @@ Zarumet is an mpd client for the terminal written in Rust.
 - [mpd](https://musicpd.org)
 - A NerdFont
 - A terminal emulator that supports truecolor and UTF-8 encoding.
+- Pipewire and libpipewire specifically (pipewire-devel on fedora for example)
+- Clang
+- Pkg-Config
+- Albumartist as part of the metadata_to_use in mpd config (maybe but I think so)
 
 ## 🦀 Installation
 
@@ -41,8 +45,7 @@ Add the zarumet repo as a flake input:
 Add the zarumet package to your system configuration:
 
 ```Nix
-{pkgs, inputs, ...}:
-{
+{pkgs, inputs, ...}: {
     environment.systemPackages = with pkgs; [
         inputs.zarumet.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];
