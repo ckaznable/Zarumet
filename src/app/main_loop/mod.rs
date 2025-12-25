@@ -1,3 +1,3 @@
-pub mod main_loop;
+pub mod unsplit_loop;
 
-pub use main_loop::AppMainLoop;
+pub use unsplit_loop::AppMainLoop;

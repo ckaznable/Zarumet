@@ -1,3 +1,3 @@
-pub mod navigation;
+pub mod unsplit;
 
-pub use navigation::Navigation;
+pub use unsplit::Navigation;
