@@ -29,7 +29,7 @@ const CLOCK_ALLOWED_RATES_KEY: &str = "clock.allowed-rates";
 const DISCOVERY_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// Timeout for sync operations
-const SYNC_TIMEOUT: Duration = Duration::from_millis(25);
+const SYNC_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// Iteration step for the main loop
 const LOOP_ITERATION_STEP: Duration = Duration::from_millis(10);
@@ -211,19 +211,19 @@ pub fn get_supported_rates() -> Option<Vec<u32>> {
 
 fn get_supported_rates_inner() -> Result<Vec<u32>, String> {
     // First try to read allowed-rates using pw-metadata command (most reliable)
-    if let Some(rates) = get_allowed_rates_from_pw_metadata() {
-        if !rates.is_empty() {
-            debug!("Got allowed-rates from pw-metadata: {:?}", rates);
-            return Ok(rates);
-        }
+    if let Some(rates) = get_allowed_rates_from_pw_metadata()
+        && !rates.is_empty()
+    {
+        debug!("Got allowed-rates from pw-metadata: {:?}", rates);
+        return Ok(rates);
     }
 
     // Fallback: try to read from PipeWire API directly
-    if let Some(rates) = get_allowed_rates_from_api() {
-        if !rates.is_empty() {
-            debug!("Got allowed-rates from PipeWire API: {:?}", rates);
-            return Ok(rates);
-        }
+    if let Some(rates) = get_allowed_rates_from_api()
+        && !rates.is_empty()
+    {
+        debug!("Got allowed-rates from PipeWire API: {:?}", rates);
+        return Ok(rates);
     }
 
     // No allowed-rates configured means PipeWire allows any rate
@@ -376,12 +376,12 @@ fn parse_allowed_rates(value: &str) -> Vec<u32> {
     // Handle both comma-separated and space-separated formats
     for part in cleaned.split([',', ' ']) {
         let trimmed = part.trim();
-        if !trimmed.is_empty() {
-            if let Ok(rate) = trimmed.parse::<u32>() {
-                if (8000..=384000).contains(&rate) && !rates.contains(&rate) {
-                    rates.push(rate);
-                }
-            }
+        if !trimmed.is_empty()
+            && let Ok(rate) = trimmed.parse::<u32>()
+            && (8000..=384000).contains(&rate)
+            && !rates.contains(&rate)
+        {
+            rates.push(rate);
         }
     }
 
